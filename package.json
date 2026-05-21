@@ -1,0 +1,14 @@
+{
+  "name": "smart-drain-app",
+  "version": "1.0.0",
+  "description": "Monitoramento de Bueiros com FIWARE",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "axios": "^1.18.0",
+    "cors": "^2.8.6",
+    "express": "^4.22.2"
+  }
+}
