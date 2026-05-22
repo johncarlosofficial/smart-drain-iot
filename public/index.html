@@ -12,10 +12,11 @@
     <header class="bg-gray-800 border-b border-cyan-500/30 p-6 shadow-xl sticky top-0 z-50">
         <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
             <h1 class="text-2xl font-black tracking-wider text-cyan-400 uppercase">⚡ Smart Drain Monitoring</h1>
-            <nav class="flex space-x-2 bg-gray-950 p-1.5 rounded-lg border border-gray-700">
+            <nav class="flex flex-wrap gap-2 bg-gray-950 p-1.5 rounded-lg border border-gray-700">
                 <button onclick="switchTab('dashboard')" id="btn-dashboard" class="px-4 py-2 rounded-md font-medium text-sm transition-all bg-cyan-600 text-white">Dashboard</button>
-                <button onclick="switchTab('cadastro')" id="btn-cadastro" class="px-4 py-2 rounded-md font-medium text-sm transition-all text-gray-400 hover:text-white">Cadastrar Bueiro</button>
-                <button onclick="switchTab('manual')" id="btn-manual" class="px-4 py-2 rounded-md font-medium text-sm transition-all text-gray-400 hover:text-white">Envio Manual</button>
+                <button onclick="switchTab('cadastro')" id="btn-cadastro" class="px-4 py-2 rounded-md font-medium text-sm transition-all text-gray-400 hover:text-white">Cadastrar</button>
+                <button onclick="switchTab('editar')" id="btn-editar" class="hidden px-4 py-2 rounded-md font-medium text-sm transition-all text-gray-400 hover:text-white">Editar</button>
+                <button onclick="switchTab('manual')" id="btn-manual" class="px-4 py-2 rounded-md font-medium text-sm transition-all text-gray-400 hover:text-white">Manual</button>
                 <button onclick="switchTab('simulacao')" id="btn-simulacao" class="px-4 py-2 rounded-md font-medium text-sm transition-all text-gray-400 hover:text-white">Simulação</button>
             </nav>
         </div>
@@ -31,9 +32,7 @@
                 </div>
                 <button onclick="switchTab('cadastro')" class="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 px-5 py-3 rounded-lg font-bold shadow-lg shadow-cyan-500/20 transition-all transform hover:-translate-y-0.5">[ + ] Criar Bueiro</button>
             </div>
-
-            <div id="devices-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                </div>
+            <div id="devices-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
         </section>
 
         <section id="tab-cadastro" class="tab-content hidden max-w-xl mx-auto bg-gray-800 p-8 rounded-xl border border-gray-700 shadow-xl">
@@ -46,11 +45,11 @@
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label class="block text-xs uppercase tracking-wider font-bold text-gray-400 mb-2">Latitude</label>
-                        <input type="number" step="any" id="cad-lat" placeholder="-5.7945" class="w-full bg-gray-950 border border-gray-700 rounded-lg p-3 text-white focus:outline-none focus:border-cyan-500" required>
+                        <input type="number" step="any" min="-90" max="90" id="cad-lat" placeholder="-5.7945" class="w-full bg-gray-950 border border-gray-700 rounded-lg p-3 text-white focus:outline-none focus:border-cyan-500" required>
                     </div>
                     <div>
                         <label class="block text-xs uppercase tracking-wider font-bold text-gray-400 mb-2">Longitude</label>
-                        <input type="number" step="any" id="cad-lng" placeholder="-35.2110" class="w-full bg-gray-950 border border-gray-700 rounded-lg p-3 text-white focus:outline-none focus:border-cyan-500" required>
+                        <input type="number" step="any" min="-180" max="180" id="cad-lng" placeholder="-35.2110" class="w-full bg-gray-950 border border-gray-700 rounded-lg p-3 text-white focus:outline-none focus:border-cyan-500" required>
                     </div>
                 </div>
                 <div>
@@ -58,6 +57,46 @@
                     <input type="date" id="cad-date" class="w-full bg-gray-950 border border-gray-700 rounded-lg p-3 text-white focus:outline-none focus:border-cyan-500">
                 </div>
                 <button type="submit" class="w-full bg-cyan-600 hover:bg-cyan-700 py-3 rounded-lg font-bold transition-colors mt-2">Cadastrar Bueiro</button>
+            </form>
+        </section>
+
+        <section id="tab-editar" class="tab-content hidden max-w-xl mx-auto bg-gray-800 p-8 rounded-xl border border-gray-700 shadow-xl">
+            <h2 class="text-xl font-bold border-b border-gray-700 pb-4 mb-6 text-emerald-400">Editar Bueiro</h2>
+            <form id="form-editar" class="space-y-4" onsubmit="updateDevice(event)">
+                <input type="hidden" id="edit-old-id">
+                <div>
+                    <label class="block text-xs uppercase tracking-wider font-bold text-gray-400 mb-2">ID do dispositivo</label>
+                    <input type="text" id="edit-id" class="w-full bg-gray-950 border border-gray-700 rounded-lg p-3 text-white focus:outline-none focus:border-emerald-500" required>
+                    <p class="text-[10px] text-gray-500 mt-1">Aviso: Alterar o ID forçará a recriação do bueiro no sistema.</p>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs uppercase tracking-wider font-bold text-gray-400 mb-2">Latitude</label>
+                        <input type="number" step="any" min="-90" max="90" id="edit-lat" class="w-full bg-gray-950 border border-gray-700 rounded-lg p-3 text-white focus:outline-none focus:border-emerald-500" required>
+                    </div>
+                    <div>
+                        <label class="block text-xs uppercase tracking-wider font-bold text-gray-400 mb-2">Longitude</label>
+                        <input type="number" step="any" min="-180" max="180" id="edit-lng" class="w-full bg-gray-950 border border-gray-700 rounded-lg p-3 text-white focus:outline-none focus:border-emerald-500" required>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs uppercase tracking-wider font-bold text-gray-400 mb-2">Nível de Água (%)</label>
+                        <input type="number" min="0" max="100" id="edit-wl" class="w-full bg-gray-950 border border-gray-700 rounded-lg p-3 text-white focus:outline-none focus:border-emerald-500" required>
+                    </div>
+                    <div>
+                        <label class="block text-xs uppercase tracking-wider font-bold text-gray-400 mb-2">Status Tampa</label>
+                        <select id="edit-cs" class="w-full bg-gray-950 border border-gray-700 rounded-lg p-3 text-white focus:outline-none focus:border-emerald-500">
+                            <option value="closed">Fechada</option>
+                            <option value="open">Aberta</option>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs uppercase tracking-wider font-bold text-gray-400 mb-2">Data da última manutenção</label>
+                    <input type="date" id="edit-date" class="w-full bg-gray-950 border border-gray-700 rounded-lg p-3 text-white focus:outline-none focus:border-emerald-500">
+                </div>
+                <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 py-3 rounded-lg font-bold transition-colors mt-2">Salvar Alterações</button>
             </form>
         </section>
 
@@ -128,43 +167,48 @@
 
     <script>
         const API_BASE = 'http://localhost:3080/api';
+        let currentDevices = []; // Array global para cache de dados do dashboard
 
-        // Alternância de Telas/Abas
         function switchTab(tabName) {
             document.querySelectorAll('.tab-content').forEach(el => el.classList.replace('block', 'hidden'));
             document.getElementById(`tab-${tabName}`).classList.replace('hidden', 'block');
             
             document.querySelectorAll('nav button').forEach(btn => btn.classList.remove('bg-cyan-600', 'text-white'));
-            document.getElementById(`btn-${tabName}`).classList.add('bg-cyan-600', 'text-white');
+            
+            // Exibir a aba editar apenas se foi chamada (esconde as demais no header padrão)
+            const btnEditar = document.getElementById('btn-editar');
+            if(tabName === 'editar') {
+                btnEditar.classList.remove('hidden');
+                btnEditar.classList.add('bg-cyan-600', 'text-white');
+            } else {
+                btnEditar.classList.add('hidden');
+                document.getElementById(`btn-${tabName}`).classList.add('bg-cyan-600', 'text-white');
+            }
 
             if(tabName === 'dashboard' || tabName === 'manual' || tabName === 'simulacao') {
                 loadDevices();
             }
         }
 
-        // Carregar dispositivos do backend
         async function loadDevices() {
             try {
                 const response = await axios.get(`${API_BASE}/devices`);
-                const devices = response.data;
+                currentDevices = response.data;
                 
-                // Atualiza contador principal
-                document.getElementById('total-count').innerHTML = `${devices.length} <span class="text-lg text-gray-500 font-normal">Bueiros</span>`;
+                document.getElementById('total-count').innerHTML = `${currentDevices.length} <span class="text-lg text-gray-500 font-normal">Bueiros</span>`;
 
-                // Renderiza Cards no Dashboard
                 const container = document.getElementById('devices-list');
-                container.innerHTML = devices.length === 0 
+                container.innerHTML = currentDevices.length === 0 
                     ? `<div class="col-span-full text-center py-12 text-gray-500">Nenhum bueiro cadastrado. Acesse a aba de cadastro.</div>`
                     : '';
 
-                // Popula Dropdowns das telas de formulário
                 document.querySelectorAll('.device-dropdown').forEach(dropdown => {
                     const savedVal = dropdown.value;
-                    dropdown.innerHTML = devices.map(d => `<option value="${d.deviceId}">${d.deviceId}</option>`).join('');
+                    dropdown.innerHTML = currentDevices.map(d => `<option value="${d.deviceId}">${d.deviceId}</option>`).join('');
                     if(savedVal) dropdown.value = savedVal;
                 });
 
-                devices.forEach(d => {
+                currentDevices.forEach(d => {
                     const isAlert = d.waterLevel > 70 || d.coverStatus === 'open';
                     const statusText = isAlert ? 'ALERTA' : 'NORMAL';
                     const statusClass = isAlert ? 'bg-rose-500/10 text-rose-400 border-rose-500/30' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30';
@@ -187,10 +231,11 @@
                                     <div class="flex justify-between text-sm pt-2"><span class="text-gray-400">Tampa:</span> <span class="font-mono text-white">${d.coverStatus === 'open' ? 'ABERTA ⚠️' : 'FECHADA'}</span></div>
                                 </div>
                             </div>
-                            <div class="grid grid-cols-2 gap-2 mt-4 pt-4 border-t border-gray-700/50">
-                                <button onclick="openManualInput('${d.deviceId}')" class="bg-gray-700 hover:bg-gray-600 text-xs py-2 px-3 rounded font-bold transition-colors">Enviar Dados</button>
-                                <button onclick="quickToggleSimulation('${d.deviceId}', ${d.isSimulating})" class="${d.isSimulating ? 'bg-rose-600/20 text-rose-400 hover:bg-rose-600/30' : 'bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30'} text-xs py-2 px-3 rounded font-bold transition-colors">
-                                    ${d.isSimulating ? 'Parar Simulação' : 'Iniciar Simulação'}
+                            <div class="grid grid-cols-3 gap-2 mt-4 pt-4 border-t border-gray-700/50">
+                                <button onclick="openManualInput('${d.deviceId}')" class="bg-gray-700 hover:bg-gray-600 text-[10px] uppercase py-2 px-1 rounded font-bold transition-colors">Manual</button>
+                                <button onclick="openEditScreen('${d.deviceId}')" class="bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 text-[10px] uppercase py-2 px-1 rounded font-bold transition-colors">Editar</button>
+                                <button onclick="quickToggleSimulation('${d.deviceId}', ${d.isSimulating})" class="${d.isSimulating ? 'bg-rose-600/20 text-rose-400 hover:bg-rose-600/30' : 'bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30'} text-[10px] uppercase py-2 px-1 rounded font-bold transition-colors">
+                                    ${d.isSimulating ? 'Parar Sim' : 'Iniciar Sim'}
                                 </button>
                             </div>
                         </div>
@@ -202,7 +247,6 @@
             }
         }
 
-        // Cadastrar Dispositivo
         async function registerDevice(e) {
             e.preventDefault();
             const payload = {
@@ -213,20 +257,65 @@
             };
             try {
                 await axios.post(`${API_BASE}/devices`, payload);
-                alert('Bueiro registrado e sincronizado no ecossistema FIWARE com sucesso!');
+                alert('Bueiro registrado com sucesso!');
                 document.getElementById('form-cadastro').reset();
                 switchTab('dashboard');
             } catch (err) {
-                // ✨ MELHORIA: Mostra os detalhes do erro (ex: se o ID já existe)
-                const detailedError = err.response?.data?.details 
-                    ? JSON.stringify(err.response.data.details) 
-                    : (err.response?.data?.error || err.message);
-                
-                alert('Falha no cadastro: ' + detailedError);
+                const errorMsg = err.response?.data?.error || err.message;
+                alert('Falha no cadastro: ' + errorMsg);
             }
         }
 
-        // Enviar Dados Manuais
+        // Função para povoar e abrir aba de edição
+        function openEditScreen(deviceId) {
+            const device = currentDevices.find(d => d.deviceId === deviceId);
+            if(!device) return alert('Dispositivo não encontrado em cache.');
+
+            switchTab('editar');
+            document.getElementById('edit-old-id').value = device.deviceId;
+            document.getElementById('edit-id').value = device.deviceId;
+            
+            if (device.location && device.location.coordinates) {
+                document.getElementById('edit-lng').value = device.location.coordinates[0];
+                document.getElementById('edit-lat').value = device.location.coordinates[1];
+            } else {
+                document.getElementById('edit-lng').value = '';
+                document.getElementById('edit-lat').value = '';
+            }
+
+            document.getElementById('edit-wl').value = device.waterLevel;
+            document.getElementById('edit-cs').value = device.coverStatus;
+            
+            // Formatando data (se houver) para o padrão YYYY-MM-DD
+            if (device.lastMaintenance && device.lastMaintenance !== 'N/A') {
+                document.getElementById('edit-date').value = new Date(device.lastMaintenance).toISOString().split('T')[0];
+            } else {
+                document.getElementById('edit-date').value = '';
+            }
+        }
+
+        // Enviar os dados da edição
+        async function updateDevice(e) {
+            e.preventDefault();
+            const oldId = document.getElementById('edit-old-id').value;
+            const payload = {
+                deviceId: document.getElementById('edit-id').value,
+                latitude: document.getElementById('edit-lat').value,
+                longitude: document.getElementById('edit-lng').value,
+                waterLevel: document.getElementById('edit-wl').value,
+                coverStatus: document.getElementById('edit-cs').value,
+                lastMaintenance: document.getElementById('edit-date').value
+            };
+            try {
+                await axios.put(`${API_BASE}/devices/${oldId}`, payload);
+                alert('Bueiro atualizado com sucesso!');
+                switchTab('dashboard');
+            } catch (err) {
+                const errorMsg = err.response?.data?.error || err.message;
+                alert('Falha na atualização: ' + errorMsg);
+            }
+        }
+
         async function sendManualData(e) {
             e.preventDefault();
             const payload = {
@@ -243,7 +332,6 @@
             }
         }
 
-        // Atalhos Rápidos da Lista do Dashboard
         function openManualInput(id) {
             switchTab('manual');
             document.getElementById('manual-id').value = id;
@@ -260,7 +348,6 @@
             }
         }
 
-        // Controle pela aba de simulação estruturada
         async function toggleSimulationForm(e) {
             e.preventDefault();
             const id = document.getElementById('sim-id').value;
@@ -289,14 +376,12 @@
             }
         }
 
-        // Loop de atualização automática em tempo de execução no Dashboard
         setInterval(() => {
             if (document.getElementById('tab-dashboard').classList.contains('block')) {
                 loadDevices();
             }
         }, 2000);
 
-        // Inicialização
         window.onload = () => loadDevices();
     </script>
 </body>

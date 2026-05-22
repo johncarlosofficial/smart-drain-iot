@@ -25,12 +25,16 @@ const fiwareHeaders = {
 // Armazenamento em memória para intervalos de simulação ativa
 const activeSimulations = {};
 
-// 1. Inicialização Automatizada do FIWARE (Service Group e Subscription)
+// Função auxiliar para validar coordenadas
+function isValidCoordinates(lat, lng) {
+    return lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
+}
+
+// 1. Inicialização Automatizada do FIWARE
 async function initFiware() {
     try {
         console.log('🔄 Inicializando configurações no FIWARE...');
         
-        // Criar Service Group
         await axios.post(`${IOTA_URL}/iot/services`, {
             services: [{
                 apikey: API_KEY,
@@ -44,7 +48,6 @@ async function initFiware() {
             } else throw err;
         });
 
-        // Criar Subscription para o QuantumLeap
         await axios.post(`${ORION_URL}/v2/subscriptions`, {
             description: "Notify QuantumLeap",
             subject: {
@@ -61,23 +64,22 @@ async function initFiware() {
 
         console.log('✅ FIWARE totalmente integrado e pronto!');
     } catch (error) {
-        console.error('❌ Erro na comunicação inicial com o FIWARE. Certifique-se de que o Docker está rodando.', error.message);
+        console.error('❌ Erro na comunicação inicial com o FIWARE.', error.message);
     }
 }
 
-// 2. Buscar todos os bueiros do Orion Context Broker
+// 2. Buscar todos os bueiros do Orion
 app.get('/api/devices', async (req, res) => {
     try {
         const response = await axios.get(`${ORION_URL}/v2/entities?type=Manhole`, { headers: fiwareHeaders });
         
-        // Formatar dados brutos do Orion para o Frontend
         const devices = response.data.map(entity => ({
             id: entity.id,
             deviceId: entity.id.split(':').pop(),
             waterLevel: entity.waterLevel ? entity.waterLevel.value : 0,
             coverStatus: entity.coverStatus ? entity.coverStatus.value : 'unknown',
             location: entity.location ? entity.location.value : null,
-            lastMaintenance: entity.lastMaintenance ? entity.lastMaintenance.value : 'N/A',
+            lastMaintenance: entity.lastMaintenance ? entity.lastMaintenance.value : '',
             isSimulating: !!activeSimulations[entity.id]
         }));
         
@@ -87,12 +89,16 @@ app.get('/api/devices', async (req, res) => {
     }
 });
 
-// 3. Cadastrar novo dispositivo (IoT Agent)
+// 3. Cadastrar novo dispositivo
 app.post('/api/devices', async (req, res) => {
     const { deviceId, latitude, longitude, lastMaintenance } = req.body;
     
-    if (!deviceId || !latitude || !longitude) {
+    if (!deviceId || latitude === undefined || longitude === undefined) {
         return res.status(400).json({ error: 'Campos obrigatórios ausentes.' });
+    }
+
+    if (!isValidCoordinates(parseFloat(latitude), parseFloat(longitude))) {
+        return res.status(400).json({ error: 'Latitude ou longitude inválidas.' });
     }
 
     try {
@@ -101,7 +107,7 @@ app.post('/api/devices', async (req, res) => {
                 device_id: deviceId,
                 entity_name: `urn:ngsi-ld:Manhole:${deviceId}`,
                 entity_type: "Manhole",
-                protocol: "IoTA-JSON", // ✨ CORREÇÃO: Alterado de "PDI-IoTA-JSON" para "IoTA-JSON"
+                protocol: "IoTA-JSON",
                 transport: "HTTP",
                 attributes: [
                     { object_id: "wl", name: "waterLevel", type: "Number" },
@@ -113,10 +119,8 @@ app.post('/api/devices', async (req, res) => {
             }]
         };
 
-        // Envia para o IoT Agent Provision
         await axios.post(`${IOTA_URL}/iot/devices`, payload, { headers: fiwareHeaders });
         
-        // Enviar payload inicial de provisionamento de dados (Southbound)
         await axios.post(`${IOTA_DATA_URL}/iot/json?k=${API_KEY}&i=${deviceId}`, {
             wl: 0,
             cs: "closed",
@@ -127,23 +131,74 @@ app.post('/api/devices', async (req, res) => {
 
         res.status(201).json({ message: `Dispositivo ${deviceId} registrado com sucesso!` });
     } catch (error) {
-        // ✨ MELHORIA: Log detalhado no terminal do VS Code/Node para debug
-        console.error('❌ Erro detalhado no cadastro FIWARE:', error.response?.data || error.message);
-        
-        // Repassa o status correto do erro (ex: 400 ou 409) em vez de mascarar tudo como 500
-        const statusCode = error.response?.status || 500;
-        res.status(statusCode).json({ 
+        console.error('❌ Erro no cadastro FIWARE:', error.response?.data || error.message);
+        res.status(error.response?.status || 500).json({ 
             error: 'Erro ao registrar dispositivo', 
             details: error.response?.data || error.message 
         });
     }
 });
 
-// 4. Envio Manual de dados de Sensores (IoT Agent JSON)
+// 4. Editar Dispositivo Existente (Atualiza atributos e, se necessário, recria o ID)
+app.put('/api/devices/:oldDeviceId', async (req, res) => {
+    const { oldDeviceId } = req.params;
+    const { deviceId, latitude, longitude, waterLevel, coverStatus, lastMaintenance } = req.body;
+
+    if (!isValidCoordinates(parseFloat(latitude), parseFloat(longitude))) {
+        return res.status(400).json({ error: 'Latitude ou longitude inválidas.' });
+    }
+
+    try {
+        // Se o ID mudou, deletamos o antigo e provisionamos o novo
+        if (oldDeviceId !== deviceId) {
+            await axios.delete(`${IOTA_URL}/iot/devices/${oldDeviceId}`, { headers: fiwareHeaders }).catch(() => {});
+            await axios.delete(`${ORION_URL}/v2/entities/urn:ngsi-ld:Manhole:${oldDeviceId}`, { headers: fiwareHeaders }).catch(() => {});
+
+            const payload = {
+                devices: [{
+                    device_id: deviceId,
+                    entity_name: `urn:ngsi-ld:Manhole:${deviceId}`,
+                    entity_type: "Manhole",
+                    protocol: "IoTA-JSON",
+                    transport: "HTTP",
+                    attributes: [
+                        { object_id: "wl", name: "waterLevel", type: "Number" },
+                        { object_id: "cs", name: "coverStatus", type: "Text" },
+                        { object_id: "loc", name: "location", type: "geo:json" },
+                        { object_id: "lm", name: "lastMaintenance", type: "DateTime" },
+                        { object_id: "od", name: "observationDate", type: "DateTime" }
+                    ]
+                }]
+            };
+            await axios.post(`${IOTA_URL}/iot/devices`, payload, { headers: fiwareHeaders });
+            
+            // Para simulação antiga se houver
+            if (activeSimulations[`urn:ngsi-ld:Manhole:${oldDeviceId}`]) {
+                clearInterval(activeSimulations[`urn:ngsi-ld:Manhole:${oldDeviceId}`]);
+                delete activeSimulations[`urn:ngsi-ld:Manhole:${oldDeviceId}`];
+            }
+        }
+
+        // Injeta os novos dados para forçar a atualização dos atributos via IoT Agent
+        await axios.post(`${IOTA_DATA_URL}/iot/json?k=${API_KEY}&i=${deviceId}`, {
+            wl: parseInt(waterLevel),
+            cs: coverStatus,
+            loc: { type: "Point", coordinates: [parseFloat(longitude), parseFloat(latitude)] },
+            lm: new Date(lastMaintenance || Date.now()).toISOString(),
+            od: new Date().toISOString()
+        });
+
+        res.json({ message: 'Dispositivo atualizado com sucesso!' });
+    } catch (error) {
+        console.error('❌ Erro na edição FIWARE:', error.message);
+        res.status(500).json({ error: 'Erro ao atualizar dispositivo.', details: error.message });
+    }
+});
+
+// 5. Envio Manual de dados de Sensores
 app.post('/api/simulate/manual', async (req, res) => {
     const { deviceId, waterLevel, coverStatus } = req.body;
     try {
-        // Busca a entidade atual para preservar a localização e manutenção anterior
         const orionRes = await axios.get(`${ORION_URL}/v2/entities/urn:ngsi-ld:Manhole:${deviceId}`, { headers: fiwareHeaders });
         const currentEntity = orionRes.data;
 
@@ -162,7 +217,7 @@ app.post('/api/simulate/manual', async (req, res) => {
     }
 });
 
-// 5. Iniciar Simulação Automática de Chuva
+// 6. Iniciar Simulação Automática de Chuva
 app.post('/api/simulate/auto/start', async (req, res) => {
     const { deviceId, simulateRain, speed } = req.body;
     const entityId = `urn:ngsi-ld:Manhole:${deviceId}`;
@@ -171,7 +226,6 @@ app.post('/api/simulate/auto/start', async (req, res) => {
         return res.status(400).json({ error: 'Simulação já ativa para este bueiro.' });
     }
 
-    // Define o intervalo em milissegundos baseado na velocidade informada
     let intervalMs = 2000;
     if (speed === 'lenta') intervalMs = 4000;
     if (speed === 'rapida') intervalMs = 500;
@@ -185,16 +239,14 @@ app.post('/api/simulate/auto/start', async (req, res) => {
             let currentCs = entity.coverStatus ? entity.coverStatus.value : 'closed';
 
             if (simulateRain) {
-                // Aumenta o nível se simulando chuva até o teto de 100%
                 currentWl = Math.min(100, currentWl + Math.floor(Math.random() * 8) + 2);
             } else {
-                // Efeito de escoamento natural se não houver chuva simulada
                 currentWl = Math.max(0, currentWl - Math.floor(Math.random() * 4) + 1);
             }
 
-            // Simula ocasionalmente uma variação na abertura da tampa para dinamismo
-            if (Math.random() > 0.92) {
-                currentCs = currentCs === 'closed' ? 'open' : 'closed';
+            // MODIFICAÇÃO: A tampa abre aleatoriamente e NÃO FECHA automaticamente.
+            if (currentCs === 'closed' && Math.random() > 0.92) {
+                currentCs = 'open';
             }
 
             await axios.post(`${IOTA_DATA_URL}/iot/json?k=${API_KEY}&i=${deviceId}`, {
@@ -213,7 +265,7 @@ app.post('/api/simulate/auto/start', async (req, res) => {
     res.json({ message: `Simulação iniciada para ${deviceId}` });
 });
 
-// 6. Parar Simulação Automática
+// 7. Parar Simulação Automática
 app.post('/api/simulate/auto/stop', (req, res) => {
     const { deviceId } = req.body;
     const entityId = `urn:ngsi-ld:Manhole:${deviceId}`;
@@ -229,6 +281,5 @@ app.post('/api/simulate/auto/stop', (req, res) => {
 
 app.listen(PORT, () => {
     console.log(`🚀 Servidor rodando em http://localhost:${PORT}`);
-    // Aguarda um pequeno delay para garantir que os containers do docker subiram por completo
     setTimeout(initFiware, 3000);
 });
