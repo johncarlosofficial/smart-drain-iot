@@ -16,7 +16,6 @@
                 <button onclick="switchTab('dashboard')" id="btn-dashboard" class="px-4 py-2 rounded-md font-medium text-sm transition-all bg-cyan-600 text-white">Dashboard</button>
                 <button onclick="switchTab('cadastro')" id="btn-cadastro" class="px-4 py-2 rounded-md font-medium text-sm transition-all text-gray-400 hover:text-white">Cadastrar</button>
                 <button onclick="switchTab('editar')" id="btn-editar" class="hidden px-4 py-2 rounded-md font-medium text-sm transition-all text-gray-400 hover:text-white">Editar</button>
-                <button onclick="switchTab('manual')" id="btn-manual" class="px-4 py-2 rounded-md font-medium text-sm transition-all text-gray-400 hover:text-white">Manual</button>
                 <button onclick="switchTab('simulacao')" id="btn-simulacao" class="px-4 py-2 rounded-md font-medium text-sm transition-all text-gray-400 hover:text-white">Simulação</button>
             </nav>
         </div>
@@ -67,7 +66,6 @@
                 <div>
                     <label class="block text-xs uppercase tracking-wider font-bold text-gray-400 mb-2">ID do dispositivo</label>
                     <input type="text" id="edit-id" class="w-full bg-gray-950 border border-gray-700 rounded-lg p-3 text-white focus:outline-none focus:border-emerald-500" required>
-                    <p class="text-[10px] text-gray-500 mt-1">Aviso: Alterar o ID forçará a recriação do bueiro no sistema.</p>
                 </div>
                 <div class="grid grid-cols-2 gap-4">
                     <div>
@@ -97,34 +95,6 @@
                     <input type="date" id="edit-date" class="w-full bg-gray-950 border border-gray-700 rounded-lg p-3 text-white focus:outline-none focus:border-emerald-500">
                 </div>
                 <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 py-3 rounded-lg font-bold transition-colors mt-2">Salvar Alterações</button>
-            </form>
-        </section>
-
-        <section id="tab-manual" class="tab-content hidden max-w-xl mx-auto bg-gray-800 p-8 rounded-xl border border-gray-700 shadow-xl">
-            <h2 class="text-xl font-bold border-b border-gray-700 pb-4 mb-6 text-cyan-400">Envio Manual de Dados</h2>
-            <form id="form-manual" class="space-y-4" onsubmit="sendManualData(event)">
-                <div>
-                    <label class="block text-xs uppercase tracking-wider font-bold text-gray-400 mb-2">Selecione o Bueiro</label>
-                    <select id="manual-id" class="w-full bg-gray-950 border border-gray-700 rounded-lg p-3 text-white focus:outline-none focus:border-cyan-500 device-dropdown" required></select>
-                </div>
-                <div>
-                    <label class="block text-xs uppercase tracking-wider font-bold text-gray-400 mb-2">Nível da Água (%)</label>
-                    <input type="number" id="manual-wl" min="0" max="100" placeholder="75" class="w-full bg-gray-950 border border-gray-700 rounded-lg p-3 text-white focus:outline-none focus:border-cyan-500" required>
-                </div>
-                <div>
-                    <label class="block text-xs uppercase tracking-wider font-bold text-gray-400 mb-2">Status da Tampa</label>
-                    <div class="flex gap-6 mt-2 bg-gray-950 p-3 border border-gray-700 rounded-lg">
-                        <label class="flex items-center space-x-2 cursor-pointer">
-                            <input type="radio" name="manual-cs" value="open" class="text-cyan-500 focus:ring-0 bg-gray-900" required>
-                            <span>Aberta</span>
-                        </label>
-                        <label class="flex items-center space-x-2 cursor-pointer">
-                            <input type="radio" name="manual-cs" value="closed" class="text-cyan-500 focus:ring-0 bg-gray-900" checked>
-                            <span>Fechada</span>
-                        </label>
-                    </div>
-                </div>
-                <button type="submit" class="w-full bg-cyan-600 hover:bg-cyan-700 py-3 rounded-lg font-bold transition-colors mt-2">Enviar Leituras</button>
             </form>
         </section>
 
@@ -167,7 +137,7 @@
 
     <script>
         const API_BASE = 'http://localhost:3080/api';
-        let currentDevices = []; // Array global para cache de dados do dashboard
+        let currentDevices = [];
 
         function switchTab(tabName) {
             document.querySelectorAll('.tab-content').forEach(el => el.classList.replace('block', 'hidden'));
@@ -175,7 +145,6 @@
             
             document.querySelectorAll('nav button').forEach(btn => btn.classList.remove('bg-cyan-600', 'text-white'));
             
-            // Exibir a aba editar apenas se foi chamada (esconde as demais no header padrão)
             const btnEditar = document.getElementById('btn-editar');
             if(tabName === 'editar') {
                 btnEditar.classList.remove('hidden');
@@ -185,7 +154,7 @@
                 document.getElementById(`btn-${tabName}`).classList.add('bg-cyan-600', 'text-white');
             }
 
-            if(tabName === 'dashboard' || tabName === 'manual' || tabName === 'simulacao') {
+            if(tabName === 'dashboard' || tabName === 'simulacao') {
                 loadDevices();
             }
         }
@@ -209,12 +178,34 @@
                 });
 
                 currentDevices.forEach(d => {
-                    const isAlert = d.waterLevel > 70 || d.coverStatus === 'open';
-                    const statusText = isAlert ? 'ALERTA' : 'NORMAL';
-                    const statusClass = isAlert ? 'bg-rose-500/10 text-rose-400 border-rose-500/30' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30';
+                    // Novas Faixas de Estado + Status de "Enchente" (100%)
+                    let statusText = 'NORMAL';
+                    let statusClass = 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30';
+                    
+                    if (d.waterLevel >= 60 && d.waterLevel <= 79) {
+                        statusText = 'ATENÇÃO';
+                        statusClass = 'bg-amber-500/10 text-amber-400 border-amber-500/30';
+                    } else if (d.waterLevel >= 80 && d.waterLevel < 100) {
+                        statusText = 'RISCO DE ENCHENTE';
+                        statusClass = 'bg-orange-500/10 text-orange-400 border-orange-500/30';
+                    } else if (d.waterLevel >= 100) {
+                        statusText = 'ENCHENTE';
+                        statusClass = 'bg-rose-500/20 text-rose-500 border-rose-500/50 animate-pulse';
+                    }
+
                     const simStatusText = d.isSimulating ? 'Simulação Ativa' : 'Inativa';
                     const simStatusClass = d.isSimulating ? 'text-emerald-400' : 'text-gray-500';
 
+                    // Fechar tampa (se aberta)
+                    const closeCoverBtn = d.coverStatus === 'open' 
+                        ? `<button onclick="closeCover('${d.deviceId}')" class="col-span-2 bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 text-[10px] uppercase py-2.5 px-1 rounded font-bold border border-amber-500/30 transition-colors text-center mt-1">🔒 Fechar Tampa</button>` 
+                        : '';
+
+                    // Botão Condicional: Desaparece se "isDraining" for verdadeiro
+                    const drainBtn = (d.waterLevel >= 100 && !d.isDraining) 
+                        ? `<button onclick="sendToLagoon('${d.deviceId}')" class="col-span-2 bg-purple-600/30 text-purple-400 hover:bg-purple-600/50 text-[10px] uppercase py-2.5 px-1 rounded font-bold border border-purple-500/40 transition-colors text-center mt-1 animate-pulse">💧 Enviar para Lagoa</button>` 
+                        : '';
+                    
                     const card = `
                         <div class="bg-gray-800 rounded-xl p-6 border border-gray-700 flex flex-col justify-between shadow-lg hover:border-gray-600 transition-all">
                             <div>
@@ -223,20 +214,21 @@
                                         <h3 class="text-lg font-bold text-white">ID: ${d.deviceId}</h3>
                                         <p class="text-xs text-gray-500 mt-1">Status motor: <span class="${simStatusClass}">${simStatusText}</span></p>
                                     </div>
-                                    <span class="px-3 py-1 text-xs font-black rounded-full border ${statusClass}">${statusText}</span>
+                                    <span class="px-3 py-1 text-xs font-black rounded-full border ${statusClass} text-center">${statusText}</span>
                                 </div>
                                 <div class="space-y-2 my-4 bg-gray-950 p-4 rounded-lg border border-gray-800">
                                     <div class="flex justify-between text-sm"><span class="text-gray-400">Nível Atual:</span> <span class="font-bold text-white">${d.waterLevel}%</span></div>
-                                    <div class="w-full bg-gray-800 h-2 rounded-full overflow-hidden"><div class="bg-cyan-500 h-full" style="width: ${d.waterLevel}%"></div></div>
+                                    <div class="w-full bg-gray-800 h-2 rounded-full overflow-hidden"><div class="bg-cyan-500 h-full transition-all duration-500" style="width: ${d.waterLevel}%"></div></div>
                                     <div class="flex justify-between text-sm pt-2"><span class="text-gray-400">Tampa:</span> <span class="font-mono text-white">${d.coverStatus === 'open' ? 'ABERTA ⚠️' : 'FECHADA'}</span></div>
                                 </div>
                             </div>
-                            <div class="grid grid-cols-3 gap-2 mt-4 pt-4 border-t border-gray-700/50">
-                                <button onclick="openManualInput('${d.deviceId}')" class="bg-gray-700 hover:bg-gray-600 text-[10px] uppercase py-2 px-1 rounded font-bold transition-colors">Manual</button>
+                            <div class="grid grid-cols-2 gap-2 mt-2 pt-4 border-t border-gray-700/50">
                                 <button onclick="openEditScreen('${d.deviceId}')" class="bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 text-[10px] uppercase py-2 px-1 rounded font-bold transition-colors">Editar</button>
                                 <button onclick="quickToggleSimulation('${d.deviceId}', ${d.isSimulating})" class="${d.isSimulating ? 'bg-rose-600/20 text-rose-400 hover:bg-rose-600/30' : 'bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30'} text-[10px] uppercase py-2 px-1 rounded font-bold transition-colors">
-                                    ${d.isSimulating ? 'Parar Sim' : 'Iniciar Sim'}
+                                    ${d.isSimulating ? 'Parar Simulação' : 'Iniciar Simulação'}
                                 </button>
+                                ${closeCoverBtn}
+                                ${drainBtn}
                             </div>
                         </div>
                     `;
@@ -261,12 +253,10 @@
                 document.getElementById('form-cadastro').reset();
                 switchTab('dashboard');
             } catch (err) {
-                const errorMsg = err.response?.data?.error || err.message;
-                alert('Falha no cadastro: ' + errorMsg);
+                alert('Falha no cadastro: ' + (err.response?.data?.error || err.message));
             }
         }
 
-        // Função para povoar e abrir aba de edição
         function openEditScreen(deviceId) {
             const device = currentDevices.find(d => d.deviceId === deviceId);
             if(!device) return alert('Dispositivo não encontrado em cache.');
@@ -278,15 +268,11 @@
             if (device.location && device.location.coordinates) {
                 document.getElementById('edit-lng').value = device.location.coordinates[0];
                 document.getElementById('edit-lat').value = device.location.coordinates[1];
-            } else {
-                document.getElementById('edit-lng').value = '';
-                document.getElementById('edit-lat').value = '';
             }
 
             document.getElementById('edit-wl').value = device.waterLevel;
             document.getElementById('edit-cs').value = device.coverStatus;
             
-            // Formatando data (se houver) para o padrão YYYY-MM-DD
             if (device.lastMaintenance && device.lastMaintenance !== 'N/A') {
                 document.getElementById('edit-date').value = new Date(device.lastMaintenance).toISOString().split('T')[0];
             } else {
@@ -294,7 +280,6 @@
             }
         }
 
-        // Enviar os dados da edição
         async function updateDevice(e) {
             e.preventDefault();
             const oldId = document.getElementById('edit-old-id').value;
@@ -311,30 +296,33 @@
                 alert('Bueiro atualizado com sucesso!');
                 switchTab('dashboard');
             } catch (err) {
-                const errorMsg = err.response?.data?.error || err.message;
-                alert('Falha na atualização: ' + errorMsg);
+                alert('Falha na atualização: ' + (err.response?.data?.error || err.message));
             }
         }
 
-        async function sendManualData(e) {
-            e.preventDefault();
-            const payload = {
-                deviceId: document.getElementById('manual-id').value,
-                waterLevel: document.getElementById('manual-wl').value,
-                coverStatus: document.querySelector('input[name="manual-cs"]:checked').value
-            };
+        async function closeCover(deviceId) {
             try {
-                await axios.post(`${API_BASE}/simulate/manual`, payload);
-                alert('Telemetria injetada no IoT Agent com sucesso!');
-                switchTab('dashboard');
+                await axios.post(`${API_BASE}/devices/${deviceId}/close-cover`);
+                loadDevices();
             } catch (err) {
-                alert('Falha no envio dos dados: ' + err.message);
+                alert('Erro ao fechar a tampa: ' + (err.response?.data?.error || err.message));
             }
         }
 
-        function openManualInput(id) {
-            switchTab('manual');
-            document.getElementById('manual-id').value = id;
+        async function sendToLagoon(deviceId) {
+            // Atualização otimista: esconde o botão imediatamente antes mesmo da requisição terminar
+            const device = currentDevices.find(d => d.deviceId === deviceId);
+            if (device) device.isDraining = true;
+            loadDevices(); 
+
+            try {
+                await axios.post(`${API_BASE}/devices/${deviceId}/drain`);
+            } catch (err) {
+                alert('Erro ao iniciar escoamento: ' + err.message);
+                // Se der erro, desfaz a ocultação otimista
+                if (device) device.isDraining = false; 
+                loadDevices();
+            }
         }
 
         async function quickToggleSimulation(id, isActive) {
