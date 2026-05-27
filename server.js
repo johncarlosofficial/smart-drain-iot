@@ -10,6 +10,7 @@ const PORT = 3080;
 const IOTA_URL = 'http://localhost:4041';
 const IOTA_DATA_URL = 'http://localhost:7896';
 const ORION_URL = 'http://localhost:1026';
+const QUANTUMLEAP_URL = 'http://localhost:8668';
 const API_KEY = '1234';
 
 app.use(cors());
@@ -21,10 +22,11 @@ const fiwareHeaders = {
     'fiware-servicepath': '/'
 };
 
-// Estados de controle em memória
+// Estados de controlo em memória
 const activeSimulations = {};
-const coverCooldown = {};    // Armazena o timestamp de quando a tampa foi fechada
-const drainingDevices = {};  // Controla se o bueiro está em processo de esvaziamento
+const simConfigs = {};       // Controla os parâmetros (como chuva) da simulação globalmente
+const coverCooldown = {};
+const drainingDevices = {};
 
 function isValidCoordinates(lat, lng) {
     return lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
@@ -48,20 +50,35 @@ async function initFiware() {
             } else throw err;
         });
 
+        // LIMPEZA: Apaga inscrições antigas para garantir que a nova regra seja aplicada
+        try {
+            const subs = await axios.get(`${ORION_URL}/v2/subscriptions`, { headers: fiwareHeaders });
+            for (let sub of subs.data) {
+                await axios.delete(`${ORION_URL}/v2/subscriptions/${sub.id}`, { headers: fiwareHeaders });
+            }
+            console.log('🧹 Inscrições antigas do Orion limpas com sucesso.');
+        } catch (e) {
+            console.log('ℹ️ Nenhuma inscrição anterior encontrada para limpar.');
+        }
+
+        // CRIAÇÃO DA SUBSCRIPTION CORRETA PARA HISTÓRICO
         await axios.post(`${ORION_URL}/v2/subscriptions`, {
-            description: "Notify QuantumLeap",
+            description: "Notify QuantumLeap on any change",
             subject: {
-                entities: [{ idPattern: ".*", type: "Manhole" }]
+                entities: [{ idPattern: ".*", type: "Manhole" }],
+                condition: {
+                    attrs: ["waterLevel", "coverStatus", "observationDate"] 
+                }
             },
             notification: {
                 http: { url: "http://quantumleap:8668/v2/notify" },
-                attrs: ["waterLevel", "coverStatus", "location", "lastMaintenance", "observationDate"]
+                attrs: ["waterLevel", "coverStatus", "location", "lastMaintenance", "observationDate"],
+                metadata: ["dateCreated", "dateModified"]
             },
             throttling: 1
-        }, { headers: fiwareHeaders }).catch(err => {
-            console.log('ℹ️ Verificação de subscription concluída (ou já existente).');
-        });
-
+        }, { headers: fiwareHeaders });
+        
+        console.log('📈 Subscription para o QuantumLeap (Base de Dados Temporal) criada!');
         console.log('✅ FIWARE totalmente integrado e pronto!');
     } catch (error) {
         console.error('❌ Erro na comunicação inicial com o FIWARE.', error.message);
@@ -81,12 +98,28 @@ app.get('/api/devices', async (req, res) => {
             location: entity.location ? entity.location.value : null,
             lastMaintenance: entity.lastMaintenance ? entity.lastMaintenance.value : '',
             isSimulating: !!activeSimulations[entity.id],
-            isDraining: !!drainingDevices[entity.id] // <--- NOVO: Informa ao frontend se já está drenando
+            isDraining: !!drainingDevices[entity.id]
         }));
         
         res.json(devices);
     } catch (error) {
         res.status(500).json({ error: 'Erro ao buscar dispositivos no Orion', details: error.message });
+    }
+});
+
+// Buscar histórico completo de alterações (QuantumLeap / CrateDB)
+app.get('/api/devices/:deviceId/history', async (req, res) => {
+    const { deviceId } = req.params;
+    const entityId = `urn:ngsi-ld:Manhole:${deviceId}`;
+    
+    try {
+        const response = await axios.get(`${QUANTUMLEAP_URL}/v2/entities/${entityId}`, { headers: fiwareHeaders });
+        res.json(response.data);
+    } catch (error) {
+        if (error.response && error.response.status === 404) {
+            return res.status(404).json({ message: 'Nenhum histórico encontrado para este dispositivo.' });
+        }
+        res.status(500).json({ error: 'Erro ao buscar histórico na base de dados', details: error.message });
     }
 });
 
@@ -130,9 +163,9 @@ app.post('/api/devices', async (req, res) => {
             od: new Date().toISOString()
         });
 
-        res.status(201).json({ message: `Dispositivo ${deviceId} registrado com sucesso!` });
+        res.status(201).json({ message: `Dispositivo ${deviceId} registado com sucesso!` });
     } catch (error) {
-        res.status(500).json({ error: 'Erro ao registrar dispositivo', details: error.message });
+        res.status(500).json({ error: 'Erro ao registar dispositivo', details: error.message });
     }
 });
 
@@ -171,9 +204,14 @@ app.put('/api/devices/:oldDeviceId', async (req, res) => {
             };
             await axios.post(`${IOTA_URL}/iot/devices`, payload, { headers: fiwareHeaders });
             
+            // Transferir estados em memória caso o ID mude
             if (activeSimulations[oldEntityId]) {
                 clearInterval(activeSimulations[oldEntityId]);
                 delete activeSimulations[oldEntityId];
+            }
+            if (simConfigs[oldEntityId]) {
+                simConfigs[newEntityId] = simConfigs[oldEntityId];
+                delete simConfigs[oldEntityId];
             }
             coverCooldown[newEntityId] = coverCooldown[oldEntityId];
             drainingDevices[newEntityId] = drainingDevices[oldEntityId];
@@ -197,7 +235,7 @@ app.put('/api/devices/:oldDeviceId', async (req, res) => {
     }
 });
 
-// Forçar Fechamento de Tampa
+// Forçar Fecho da Tampa
 app.post('/api/devices/:deviceId/close-cover', async (req, res) => {
     const { deviceId } = req.params;
     const entityId = `urn:ngsi-ld:Manhole:${deviceId}`;
@@ -229,6 +267,7 @@ app.post('/api/devices/:deviceId/drain', async (req, res) => {
 
     drainingDevices[entityId] = true;
 
+    // Se o escoamento foi pedido manualmente (fora do ciclo de simulação)
     if (!activeSimulations[entityId]) {
         const backgroundDrain = setInterval(async () => {
             try {
@@ -249,6 +288,11 @@ app.post('/api/devices/:deviceId/drain', async (req, res) => {
                 if (wl <= 40) {
                     clearInterval(backgroundDrain);
                     drainingDevices[entityId] = false;
+                    
+                    // Desliga a chuva constante se estiver ativa na memória
+                    if (simConfigs[entityId]) {
+                        simConfigs[entityId].simulateRain = false;
+                    }
                 }
             } catch (err) {
                 clearInterval(backgroundDrain);
@@ -269,6 +313,9 @@ app.post('/api/simulate/auto/start', async (req, res) => {
         return res.status(400).json({ error: 'Simulação já ativa.' });
     }
 
+    // Guarda as definições globalmente
+    simConfigs[entityId] = { simulateRain, speed };
+
     let intervalMs = 2000;
     if (speed === 'lenta') intervalMs = 4000;
     if (speed === 'rapida') intervalMs = 500;
@@ -285,9 +332,13 @@ app.post('/api/simulate/auto/start', async (req, res) => {
                 currentWl = Math.max(40, currentWl - 8);
                 if (currentWl <= 40) {
                     drainingDevices[entityId] = false;
+                    // Ao terminar o escoamento, desliga a chuva constante (volta a Normal)
+                    if (simConfigs[entityId]) {
+                        simConfigs[entityId].simulateRain = false; 
+                    }
                 }
             } else {
-                if (simulateRain) {
+                if (simConfigs[entityId] && simConfigs[entityId].simulateRain) {
                     currentWl = Math.min(100, currentWl + Math.floor(Math.random() * 8) + 2);
                 } else {
                     currentWl = Math.max(0, currentWl - Math.floor(Math.random() * 4) + 1);
@@ -325,6 +376,7 @@ app.post('/api/simulate/auto/stop', (req, res) => {
     if (activeSimulations[entityId]) {
         clearInterval(activeSimulations[entityId]);
         delete activeSimulations[entityId];
+        delete simConfigs[entityId]; // Limpa a configuração da memória
         res.json({ message: `Simulação parada` });
     } else {
         res.status(400).json({ error: 'Nenhuma simulação ativa.' });
@@ -332,6 +384,6 @@ app.post('/api/simulate/auto/stop', (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`🚀 Servidor rodando em http://localhost:${PORT}`);
+    console.log(`🚀 Servidor a correr em http://localhost:${PORT}`);
     setTimeout(initFiware, 3000);
 });
