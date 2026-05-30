@@ -235,6 +235,33 @@ app.put('/api/devices/:oldDeviceId', async (req, res) => {
     }
 });
 
+// Excluir Dispositivo
+app.delete('/api/devices/:deviceId', async (req, res) => {
+    const { deviceId } = req.params;
+    const entityId = `urn:ngsi-ld:Manhole:${deviceId}`;
+
+    try {
+        // Remove do IoT Agent
+        await axios.delete(`${IOTA_URL}/iot/devices/${deviceId}`, { headers: fiwareHeaders }).catch(() => {});
+        
+        // Remove do Orion Context Broker
+        await axios.delete(`${ORION_URL}/v2/entities/${entityId}`, { headers: fiwareHeaders }).catch(() => {});
+
+        // Limpa os estados em memória caso o bueiro esteja rodando alguma simulação
+        if (activeSimulations[entityId]) {
+            clearInterval(activeSimulations[entityId]);
+            delete activeSimulations[entityId];
+        }
+        delete simConfigs[entityId];
+        delete coverCooldown[entityId];
+        delete drainingDevices[entityId];
+
+        res.json({ message: 'Dispositivo excluído com sucesso!' });
+    } catch (error) {
+        res.status(500).json({ error: 'Erro ao excluir dispositivo.', details: error.message });
+    }
+});
+
 // Forçar Fecho da Tampa
 app.post('/api/devices/:deviceId/close-cover', async (req, res) => {
     const { deviceId } = req.params;

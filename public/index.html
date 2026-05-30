@@ -96,6 +96,7 @@
                 </div>
                 <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 py-3 rounded-lg font-bold transition-colors mt-2">Salvar Alterações</button>
             </form>
+            <button onclick="deleteDevice()" class="w-full bg-rose-600 hover:bg-rose-700 py-3 rounded-lg font-bold transition-colors mt-4 shadow-lg shadow-rose-500/20 text-white">Excluir Bueiro</button>
         </section>
 
         <section id="tab-simulacao" class="tab-content hidden max-w-xl mx-auto bg-gray-800 p-8 rounded-xl border border-gray-700 shadow-xl">
@@ -361,6 +362,27 @@
                 switchTab('dashboard');
             } catch (err) {
                 alert(err.response?.data?.error || err.message);
+            }
+        }
+
+        async function deleteDevice() {
+            // Pega o ID antigo, pois é a referência mais segura caso o usuário tenha digitado algo no input de ID
+            const targetId = document.getElementById('edit-old-id').value;
+
+            if (!targetId) {
+                return alert('Nenhum dispositivo selecionado para exclusão.');
+            }
+
+            const confirmacao = confirm(`⚠️ Atenção!\nTem certeza que deseja excluir permanentemente o bueiro "${targetId}"?`);
+            
+            if (!confirmacao) return;
+
+            try {
+                await axios.delete(`${API_BASE}/devices/${targetId}`);
+                alert('Bueiro excluído com sucesso!');
+                switchTab('dashboard'); // Volta para o painel principal e recarrega os dados
+            } catch (err) {
+                alert('Falha na exclusão: ' + (err.response?.data?.error || err.message));
             }
         }
 
