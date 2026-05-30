@@ -44,11 +44,11 @@
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label class="block text-xs uppercase tracking-wider font-bold text-gray-400 mb-2">Latitude</label>
-                        <input type="number" step="any" min="-90" max="90" id="cad-lat" placeholder="-5.7945" class="w-full bg-gray-950 border border-gray-700 rounded-lg p-3 text-white focus:outline-none focus:border-cyan-500" required>
+                        <input type="text" inputmode="decimal" id="cad-lat" placeholder="-5.7945" oninput="formatCoordinate(this)" class="w-full bg-gray-950 border border-gray-700 rounded-lg p-3 text-white focus:outline-none focus:border-cyan-500" required>
                     </div>
                     <div>
                         <label class="block text-xs uppercase tracking-wider font-bold text-gray-400 mb-2">Longitude</label>
-                        <input type="number" step="any" min="-180" max="180" id="cad-lng" placeholder="-35.2110" class="w-full bg-gray-950 border border-gray-700 rounded-lg p-3 text-white focus:outline-none focus:border-cyan-500" required>
+                        <input type="text" inputmode="decimal" id="cad-lng" placeholder="-35.2110" oninput="formatCoordinate(this)" class="w-full bg-gray-950 border border-gray-700 rounded-lg p-3 text-white focus:outline-none focus:border-cyan-500" required>
                     </div>
                 </div>
                 <div>
@@ -70,11 +70,11 @@
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label class="block text-xs uppercase tracking-wider font-bold text-gray-400 mb-2">Latitude</label>
-                        <input type="number" step="any" min="-90" max="90" id="edit-lat" class="w-full bg-gray-950 border border-gray-700 rounded-lg p-3 text-white focus:outline-none focus:border-emerald-500" required>
+                        <input type="text" inputmode="decimal" id="edit-lat" oninput="formatCoordinate(this)" class="w-full bg-gray-950 border border-gray-700 rounded-lg p-3 text-white focus:outline-none focus:border-emerald-500" required>
                     </div>
                     <div>
                         <label class="block text-xs uppercase tracking-wider font-bold text-gray-400 mb-2">Longitude</label>
-                        <input type="number" step="any" min="-180" max="180" id="edit-lng" class="w-full bg-gray-950 border border-gray-700 rounded-lg p-3 text-white focus:outline-none focus:border-emerald-500" required>
+                        <input type="text" inputmode="decimal" id="edit-lng" oninput="formatCoordinate(this)" class="w-full bg-gray-950 border border-gray-700 rounded-lg p-3 text-white focus:outline-none focus:border-emerald-500" required>
                     </div>
                 </div>
                 <div class="grid grid-cols-2 gap-4">
@@ -242,10 +242,23 @@
 
         async function registerDevice(e) {
             e.preventDefault();
+            const deviceId = document.getElementById('cad-id').value;
+            const lat = parseFloat(document.getElementById('cad-lat').value);
+            const lng = parseFloat(document.getElementById('cad-lng').value);
+
+            // 1. Validação de ID Duplicado
+            if (currentDevices.some(d => d.deviceId === deviceId)) {
+                return alert('⚠️ Erro: Já existe um bueiro cadastrado com este ID!');
+            }
+
+            // 2. Validação matemática de coordenadas
+            if (lat < -90 || lat > 90) return alert('⚠️ A latitude deve estar entre -90 e 90.');
+            if (lng < -180 || lng > 180) return alert('⚠️ A longitude deve estar entre -180 e 180.');
+
             const payload = {
-                deviceId: document.getElementById('cad-id').value,
-                latitude: document.getElementById('cad-lat').value,
-                longitude: document.getElementById('cad-lng').value,
+                deviceId: deviceId,
+                latitude: lat,
+                longitude: lng,
                 lastMaintenance: document.getElementById('cad-date').value
             };
             try {
@@ -284,10 +297,23 @@
         async function updateDevice(e) {
             e.preventDefault();
             const oldId = document.getElementById('edit-old-id').value;
+            const newId = document.getElementById('edit-id').value;
+            const lat = parseFloat(document.getElementById('edit-lat').value);
+            const lng = parseFloat(document.getElementById('edit-lng').value);
+
+            // 1. Validação de ID Duplicado (Ignora se for o próprio ID antigo)
+            if (newId !== oldId && currentDevices.some(d => d.deviceId === newId)) {
+                return alert('⚠️ Erro: Você tentou alterar o ID para um que já existe!');
+            }
+
+            // 2. Validação matemática de coordenadas
+            if (lat < -90 || lat > 90) return alert('⚠️ A latitude deve estar entre -90 e 90.');
+            if (lng < -180 || lng > 180) return alert('⚠️ A longitude deve estar entre -180 e 180.');
+
             const payload = {
-                deviceId: document.getElementById('edit-id').value,
-                latitude: document.getElementById('edit-lat').value,
-                longitude: document.getElementById('edit-lng').value,
+                deviceId: newId,
+                latitude: lat,
+                longitude: lng,
                 waterLevel: document.getElementById('edit-wl').value,
                 coverStatus: document.getElementById('edit-cs').value,
                 lastMaintenance: document.getElementById('edit-date').value
@@ -386,13 +412,45 @@
             }
         }
 
+        // Função para bloquear datas futuras
+        function setMaxDates() {
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('cad-date').setAttribute('max', today);
+            document.getElementById('edit-date').setAttribute('max', today);
+        }
+
+        // Função para formatar Latitude e Longitude
+        function formatCoordinate(input) {
+            // Troca vírgula por ponto (para padronizar)
+            let val = input.value.replace(',', '.');
+            
+            // Permite apenas um sinal de menos no início, números e um único ponto
+            val = val.replace(/(?!^-)[^0-9.]/g, ''); 
+            
+            // Garante que só exista um ponto na string
+            const parts = val.split('.');
+            if (parts.length > 2) {
+                val = parts[0] + '.' + parts.slice(1).join('');
+            }
+            
+            // Limita a 6 casas decimais (padrão ideal para GPS)
+            if (parts[1] && parts[1].length > 6) {
+                val = parts[0] + '.' + parts[1].substring(0, 6);
+            }
+            
+            input.value = val;
+        }
+
         setInterval(() => {
             if (document.getElementById('tab-dashboard').classList.contains('block')) {
                 loadDevices();
             }
         }, 2000);
 
-        window.onload = () => loadDevices();
+        window.onload = () => {
+            loadDevices();
+            setMaxDates(); // <--- Aplica o bloqueio de datas futuras nos calendários
+        };
     </script>
 </body>
 </html>
