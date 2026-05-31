@@ -140,6 +140,20 @@
         const API_BASE = 'http://localhost:3080/api';
         let currentDevices = [];
 
+        // LER configurações salvas na memória do navegador
+        function getSimConfig(deviceId) {
+            const configs = JSON.parse(localStorage.getItem('bueiroConfigs') || '{}');
+            return configs[deviceId] || { rain: true, speed: 'media' };
+        }
+
+        // SALVAR configurações na memória do navegador
+        function saveSimConfig(deviceId, key, value) {
+            const configs = JSON.parse(localStorage.getItem('bueiroConfigs') || '{}');
+            if (!configs[deviceId]) configs[deviceId] = { rain: true, speed: 'media' };
+            configs[deviceId][key] = value;
+            localStorage.setItem('bueiroConfigs', JSON.stringify(configs));
+        }
+
         function switchTab(tabName) {
             document.querySelectorAll('.tab-content').forEach(el => el.classList.replace('block', 'hidden'));
             document.getElementById(`tab-${tabName}`).classList.replace('hidden', 'block');
@@ -168,72 +182,114 @@
                 document.getElementById('total-count').innerHTML = `${currentDevices.length} <span class="text-lg text-gray-500 font-normal">Bueiros</span>`;
 
                 const container = document.getElementById('devices-list');
-                container.innerHTML = currentDevices.length === 0 
-                    ? `<div class="col-span-full text-center py-12 text-gray-500">Nenhum bueiro cadastrado. Acesse a aba de cadastro.</div>`
-                    : '';
+                
+                if (currentDevices.length === 0) {
+                    container.innerHTML = `<div class="col-span-full text-center py-12 text-gray-500">Nenhum bueiro cadastrado. Acesse a aba de cadastro.</div>`;
+                    return;
+                } else if (container.querySelector('.col-span-full')) {
+                    container.innerHTML = ''; // Limpa a mensagem de vazio
+                }
 
-                document.querySelectorAll('.device-dropdown').forEach(dropdown => {
-                    const savedVal = dropdown.value;
-                    dropdown.innerHTML = currentDevices.map(d => `<option value="${d.deviceId}">${d.deviceId}</option>`).join('');
-                    if(savedVal) dropdown.value = savedVal;
+                // Remove da tela os cards de bueiros que foram excluídos
+                const currentIds = currentDevices.map(d => d.deviceId);
+                Array.from(container.children).forEach(child => {
+                    if (child.id && child.id.startsWith('card-')) {
+                        if (!currentIds.includes(child.id.replace('card-', ''))) {
+                            child.remove();
+                        }
+                    }
                 });
 
+                // Atualiza ou Cria os Cards
                 currentDevices.forEach(d => {
-                    // Novas Faixas de Estado + Status de "Enchente" (100%)
                     let statusText = 'NORMAL';
                     let statusClass = 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30';
                     
-                    if (d.waterLevel >= 60 && d.waterLevel <= 79) {
-                        statusText = 'ATENÇÃO';
-                        statusClass = 'bg-amber-500/10 text-amber-400 border-amber-500/30';
-                    } else if (d.waterLevel >= 80 && d.waterLevel < 100) {
-                        statusText = 'RISCO DE ENCHENTE';
-                        statusClass = 'bg-orange-500/10 text-orange-400 border-orange-500/30';
-                    } else if (d.waterLevel >= 100) {
-                        statusText = 'ENCHENTE';
-                        statusClass = 'bg-rose-500/20 text-rose-500 border-rose-500/50 animate-pulse';
-                    }
+                    if (d.waterLevel >= 60 && d.waterLevel <= 79) { statusText = 'ATENÇÃO'; statusClass = 'bg-amber-500/10 text-amber-400 border-amber-500/30'; } 
+                    else if (d.waterLevel >= 80 && d.waterLevel < 100) { statusText = 'RISCO DE ENCHENTE'; statusClass = 'bg-orange-500/10 text-orange-400 border-orange-500/30'; } 
+                    else if (d.waterLevel >= 100) { statusText = 'ENCHENTE'; statusClass = 'bg-rose-500/20 text-rose-500 border-rose-500/50 animate-pulse'; }
 
                     const simStatusText = d.isSimulating ? 'Simulação Ativa' : 'Inativa';
                     const simStatusClass = d.isSimulating ? 'text-emerald-400' : 'text-gray-500';
 
-                    // Fechar tampa (se aberta)
-                    const closeCoverBtn = d.coverStatus === 'open' 
-                        ? `<button onclick="closeCover('${d.deviceId}')" class="col-span-2 bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 text-[10px] uppercase py-2.5 px-1 rounded font-bold border border-amber-500/30 transition-colors text-center mt-1">🔒 Fechar Tampa</button>` 
-                        : '';
-
-                    // Botão Condicional: Desaparece se "isDraining" for verdadeiro
-                    const drainBtn = (d.waterLevel >= 100 && !d.isDraining) 
-                        ? `<button onclick="sendToLagoon('${d.deviceId}')" class="col-span-2 bg-purple-600/30 text-purple-400 hover:bg-purple-600/50 text-[10px] uppercase py-2.5 px-1 rounded font-bold border border-purple-500/40 transition-colors text-center mt-1 animate-pulse">💧 Enviar para Lagoa</button>` 
-                        : '';
+                    const cardId = `card-${d.deviceId}`;
+                    let cardEl = document.getElementById(cardId);
                     
-                    const card = `
-                        <div class="bg-gray-800 rounded-xl p-6 border border-gray-700 flex flex-col justify-between shadow-lg hover:border-gray-600 transition-all">
-                            <div>
-                                <div class="flex justify-between items-start mb-4">
-                                    <div>
-                                        <h3 class="text-lg font-bold text-white">ID: ${d.deviceId}</h3>
-                                        <p class="text-xs text-gray-500 mt-1">Status motor: <span class="${simStatusClass}">${simStatusText}</span></p>
+                    // Busca as configurações na memória para esse card
+                    const config = getSimConfig(d.deviceId);
+
+                    if (cardEl) {
+                        // O CARD EXISTE: Atualiza cirurgicamente apenas os dados dinâmicos (O SELECT NUNCA FECHARÁ!)
+                        document.getElementById(`wl-txt-${d.deviceId}`).innerText = `${d.waterLevel}%`;
+                        document.getElementById(`wl-bar-${d.deviceId}`).style.width = `${d.waterLevel}%`;
+                        document.getElementById(`badge-${d.deviceId}`).className = `px-3 py-1 text-xs font-black rounded-full border text-center ${statusClass}`;
+                        document.getElementById(`badge-${d.deviceId}`).innerText = statusText;
+                        document.getElementById(`motor-${d.deviceId}`).className = simStatusClass;
+                        document.getElementById(`motor-${d.deviceId}`).innerText = simStatusText;
+                        document.getElementById(`cover-${d.deviceId}`).innerText = d.coverStatus === 'open' ? 'ABERTA ⚠️' : 'FECHADA';
+                        
+                        document.getElementById(`config-${d.deviceId}`).style.display = d.isSimulating ? 'none' : 'flex';
+                        
+                        const btnSim = document.getElementById(`btn-sim-${d.deviceId}`);
+                        btnSim.innerText = d.isSimulating ? 'Parar Simulação' : 'Iniciar Simulação';
+                        btnSim.className = d.isSimulating ? 'bg-rose-600/20 text-rose-400 hover:bg-rose-600/30 text-[10px] uppercase py-2 px-1 rounded font-bold transition-colors' : 'bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30 text-[10px] uppercase py-2 px-1 rounded font-bold transition-colors';
+                        btnSim.setAttribute('onclick', `quickToggleSimulation('${d.deviceId}', ${d.isSimulating})`);
+
+                        // Atualiza botões extras dinamicamente
+                        const extraBtns = document.getElementById(`extra-btns-${d.deviceId}`);
+                        let btnsHTML = '';
+                        if (d.coverStatus === 'open') btnsHTML += `<button onclick="closeCover('${d.deviceId}')" class="w-full bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 text-[10px] uppercase py-2.5 px-1 rounded font-bold border border-amber-500/30 transition-colors text-center mt-1">🔒 Fechar Tampa</button>`;
+                        if (d.waterLevel >= 100 && !d.isDraining) btnsHTML += `<button onclick="sendToLagoon('${d.deviceId}')" class="w-full bg-purple-600/30 text-purple-400 hover:bg-purple-600/50 text-[10px] uppercase py-2.5 px-1 rounded font-bold border border-purple-500/40 transition-colors text-center mt-1 animate-pulse">💧 Enviar para Lagoa</button>`;
+                        extraBtns.innerHTML = btnsHTML;
+
+                    } else {
+                        // O CARD NÃO EXISTE: Cria pela primeira vez
+                        const cardHTML = `
+                            <div id="${cardId}" class="bg-gray-800 rounded-xl p-6 border border-gray-700 flex flex-col justify-between shadow-lg hover:border-gray-600 transition-all">
+                                <div>
+                                    <div class="flex justify-between items-start mb-4">
+                                        <div>
+                                            <h3 class="text-lg font-bold text-white">ID: ${d.deviceId}</h3>
+                                            <p class="text-xs text-gray-500 mt-1">Status motor: <span id="motor-${d.deviceId}" class="${simStatusClass}">${simStatusText}</span></p>
+                                        </div>
+                                        <span id="badge-${d.deviceId}" class="px-3 py-1 text-xs font-black rounded-full border ${statusClass} text-center">${statusText}</span>
                                     </div>
-                                    <span class="px-3 py-1 text-xs font-black rounded-full border ${statusClass} text-center">${statusText}</span>
+                                    <div class="space-y-2 my-4 bg-gray-950 p-4 rounded-lg border border-gray-800">
+                                        <div class="flex justify-between text-sm"><span class="text-gray-400">Nível Atual:</span> <span id="wl-txt-${d.deviceId}" class="font-bold text-white">${d.waterLevel}%</span></div>
+                                        <div class="w-full bg-gray-800 h-2 rounded-full overflow-hidden"><div id="wl-bar-${d.deviceId}" class="bg-cyan-500 h-full transition-all duration-500" style="width: ${d.waterLevel}%"></div></div>
+                                        <div class="flex justify-between text-sm pt-2"><span class="text-gray-400">Tampa:</span> <span id="cover-${d.deviceId}" class="font-mono text-white">${d.coverStatus === 'open' ? 'ABERTA ⚠️' : 'FECHADA'}</span></div>
+                                    </div>
                                 </div>
-                                <div class="space-y-2 my-4 bg-gray-950 p-4 rounded-lg border border-gray-800">
-                                    <div class="flex justify-between text-sm"><span class="text-gray-400">Nível Atual:</span> <span class="font-bold text-white">${d.waterLevel}%</span></div>
-                                    <div class="w-full bg-gray-800 h-2 rounded-full overflow-hidden"><div class="bg-cyan-500 h-full transition-all duration-500" style="width: ${d.waterLevel}%"></div></div>
-                                    <div class="flex justify-between text-sm pt-2"><span class="text-gray-400">Tampa:</span> <span class="font-mono text-white">${d.coverStatus === 'open' ? 'ABERTA ⚠️' : 'FECHADA'}</span></div>
+                                
+                                <div id="config-${d.deviceId}" class="col-span-2 flex items-center justify-between bg-gray-950 p-2 rounded border border-gray-700 text-xs mt-2" style="display: ${d.isSimulating ? 'none' : 'flex'}">
+                                    <label class="flex items-center text-gray-300 cursor-pointer font-bold">
+                                        <input type="checkbox" onchange="saveSimConfig('${d.deviceId}', 'rain', this.checked)" class="mr-2 text-cyan-600 bg-gray-900 border-gray-700 rounded focus:ring-0" ${config.rain ? 'checked' : ''}>
+                                        Simular Chuva
+                                    </label>
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-gray-500 font-bold">Velocidade:</span>
+                                        <select onchange="saveSimConfig('${d.deviceId}', 'speed', this.value)" class="bg-gray-900 text-cyan-400 font-bold border border-gray-700 rounded p-1 focus:outline-none focus:border-cyan-500 cursor-pointer">
+                                            <option value="lenta" ${config.speed === 'lenta' ? 'selected' : ''}>Lenta</option>
+                                            <option value="media" ${config.speed === 'media' ? 'selected' : ''}>Média</option>
+                                            <option value="rapida" ${config.speed === 'rapida' ? 'selected' : ''}>Rápida</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div class="grid grid-cols-2 gap-2 mt-2 pt-4 border-t border-gray-700/50">
+                                    <button onclick="openEditScreen('${d.deviceId}')" class="bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 text-[10px] uppercase py-2 px-1 rounded font-bold transition-colors">Editar</button>
+                                    <button id="btn-sim-${d.deviceId}" onclick="quickToggleSimulation('${d.deviceId}', ${d.isSimulating})" class="${d.isSimulating ? 'bg-rose-600/20 text-rose-400 hover:bg-rose-600/30' : 'bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30'} text-[10px] uppercase py-2 px-1 rounded font-bold transition-colors">
+                                        ${d.isSimulating ? 'Parar Simulação' : 'Iniciar Simulação'}
+                                    </button>
+                                    <div id="extra-btns-${d.deviceId}" class="col-span-2 flex flex-col">
+                                        ${d.coverStatus === 'open' ? `<button onclick="closeCover('${d.deviceId}')" class="w-full bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 text-[10px] uppercase py-2.5 px-1 rounded font-bold border border-amber-500/30 transition-colors text-center mt-1">🔒 Fechar Tampa</button>` : ''}
+                                        ${d.waterLevel >= 100 && !d.isDraining ? `<button onclick="sendToLagoon('${d.deviceId}')" class="w-full bg-purple-600/30 text-purple-400 hover:bg-purple-600/50 text-[10px] uppercase py-2.5 px-1 rounded font-bold border border-purple-500/40 transition-colors text-center mt-1 animate-pulse">💧 Enviar para Lagoa</button>` : ''}
+                                    </div>
                                 </div>
                             </div>
-                            <div class="grid grid-cols-2 gap-2 mt-2 pt-4 border-t border-gray-700/50">
-                                <button onclick="openEditScreen('${d.deviceId}')" class="bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 text-[10px] uppercase py-2 px-1 rounded font-bold transition-colors">Editar</button>
-                                <button onclick="quickToggleSimulation('${d.deviceId}', ${d.isSimulating})" class="${d.isSimulating ? 'bg-rose-600/20 text-rose-400 hover:bg-rose-600/30' : 'bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30'} text-[10px] uppercase py-2 px-1 rounded font-bold transition-colors">
-                                    ${d.isSimulating ? 'Parar Simulação' : 'Iniciar Simulação'}
-                                </button>
-                                ${closeCoverBtn}
-                                ${drainBtn}
-                            </div>
-                        </div>
-                    `;
-                    container.innerHTML += card;
+                        `;
+                        container.insertAdjacentHTML('beforeend', cardHTML);
+                    }
                 });
             } catch (error) {
                 console.error('Erro ao processar atualização da lista:', error);
@@ -354,9 +410,17 @@
 
         async function quickToggleSimulation(id, isActive) {
             try {
-                const endpoint = isActive ? 'stop' : 'start';
-                const payload = isActive ? { deviceId: id } : { deviceId: id, simulateRain: true, speed: 'media' };
-                await axios.post(`${API_BASE}/simulate/auto/${endpoint}`, payload);
+                if (isActive) {
+                    await axios.post(`${API_BASE}/simulate/auto/stop`, { deviceId: id });
+                } else {
+                    // Busca os dados diretamente da memória salva para este ID específico
+                    const config = getSimConfig(id);
+                    await axios.post(`${API_BASE}/simulate/auto/start`, { 
+                        deviceId: id, 
+                        simulateRain: config.rain, 
+                        speed: config.speed 
+                    });
+                }
                 loadDevices();
             } catch (err) {
                 alert('Erro ao alterar estado da simulação: ' + err.message);
@@ -443,7 +507,7 @@
 
         setInterval(() => {
             if (document.getElementById('tab-dashboard').classList.contains('block')) {
-                loadDevices();
+                loadDevices(); // Atualiza sempre, a lógica de congelamento vai para dentro da função
             }
         }, 2000);
 
