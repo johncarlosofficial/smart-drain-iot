@@ -562,8 +562,12 @@
         }
 
         setInterval(() => {
-            if (document.getElementById('tab-dashboard').classList.contains('block')) {
-                loadDevices(); // Atualiza sempre, a lógica de congelamento vai para dentro da função
+            // Agora verifica se o Dashboard OU o Mapa estão abertos
+            const isDashboardOpen = document.getElementById('tab-dashboard').classList.contains('block');
+            const isMapaOpen = document.getElementById('tab-mapa') && document.getElementById('tab-mapa').classList.contains('block');
+            
+            if (isDashboardOpen || isMapaOpen) {
+                loadDevices(); 
             }
         }, 2000);
 
