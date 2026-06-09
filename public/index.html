@@ -334,7 +334,21 @@
                         else if (d.waterLevel >= 80) color = "#f43f5e"; // Rose (Risco/Enchente)
 
                         // Criar um ícone em HTML customizado
-                        const markerHtml = `<div style="background-color: ${color}; width: 16px; height: 16px; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 4px rgba(0,0,0,0.5);"></div>`;
+                        // index.html - Trecho modificado
+
+                        // index.html - Dentro da função loadDevices()
+
+                        let iconContent = ''; 
+                        let markerClasses = ''; 
+
+                        if (d.coverStatus === 'open') {
+                            // Aumentei o font-size de 10px para 16px
+                            iconContent = `<span style="color: white; font-size: 14px; font-weight: bold; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">⚠</span>`;
+                            markerClasses = 'animate-pulse';
+                        }
+
+                        // Mudei width e height de 16px para 32px
+                        const markerHtml = `<div class="${markerClasses}" style="background-color: ${color}; width: 24px; height: 24px; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 4px rgba(0,0,0,0.5); position: relative;">${iconContent}</div>`;
                         const customIcon = L.divIcon({ html: markerHtml, className: '' });
 
                         // Adiciona o marcador e o Pop-up

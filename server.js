@@ -345,7 +345,7 @@ app.post('/api/simulate/auto/start', async (req, res) => {
 
     let intervalMs = 2000;
     if (speed === 'lenta') intervalMs = 4000;
-    if (speed === 'rapida') intervalMs = 500;
+    if (speed === 'rapida') intervalMs = 1000;
 
     activeSimulations[entityId] = setInterval(async () => {
         try {
