@@ -61,11 +61,3 @@ services:
       - "8668:8668"
     environment:
       - CRATE_HOST=crate-db
-
-  grafana:
-    image: grafana/grafana
-    container_name: grafana
-    ports:
-      - "3000:3000"
-    depends_on:
-      - crate-db
