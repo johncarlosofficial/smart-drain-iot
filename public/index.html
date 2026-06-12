@@ -40,7 +40,6 @@
         <section id="tab-mapa" class="tab-content hidden space-y-6">
             <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-md">
                 <h2 class="text-xl font-bold border-b border-gray-700 pb-4 mb-6 text-cyan-400">Localização dos Bueiros</h2>
-                <!-- O z-0 é importante para o mapa não sobrepor o seu menu fixo do Tailwind -->
                 <div id="map" class="w-full h-[500px] rounded-lg z-0 border border-gray-700"></div>
             </div>
         </section>
@@ -50,16 +49,16 @@
             <form id="form-cadastro" class="space-y-4" onsubmit="registerDevice(event)">
                 <div>
                     <label class="block text-xs uppercase tracking-wider font-bold text-gray-400 mb-2">ID do dispositivo</label>
-                    <input type="text" id="cad-id" placeholder="Ex: manhole001" class="w-full bg-gray-950 border border-gray-700 rounded-lg p-3 text-white focus:outline-none focus:border-cyan-500" required>
+                    <input type="text" id="cad-id" placeholder="Ex: 1" class="w-full bg-gray-950 border border-gray-700 rounded-lg p-3 text-white focus:outline-none focus:border-cyan-500" required>
                 </div>
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label class="block text-xs uppercase tracking-wider font-bold text-gray-400 mb-2">Latitude</label>
-                        <input type="text" inputmode="decimal" id="cad-lat" placeholder="-5.7945" oninput="formatCoordinate(this)" class="w-full bg-gray-950 border border-gray-700 rounded-lg p-3 text-white focus:outline-none focus:border-cyan-500" required>
+                        <input type="text" inputmode="decimal" id="cad-lat" placeholder="Ex: -5.7945" oninput="formatCoordinate(this)" class="w-full bg-gray-950 border border-gray-700 rounded-lg p-3 text-white focus:outline-none focus:border-cyan-500" required>
                     </div>
                     <div>
                         <label class="block text-xs uppercase tracking-wider font-bold text-gray-400 mb-2">Longitude</label>
-                        <input type="text" inputmode="decimal" id="cad-lng" placeholder="-35.2110" oninput="formatCoordinate(this)" class="w-full bg-gray-950 border border-gray-700 rounded-lg p-3 text-white focus:outline-none focus:border-cyan-500" required>
+                        <input type="text" inputmode="decimal" id="cad-lng" placeholder="Ex: -35.2110" oninput="formatCoordinate(this)" class="w-full bg-gray-950 border border-gray-700 rounded-lg p-3 text-white focus:outline-none focus:border-cyan-500" required>
                     </div>
                 </div>
                 <div>
@@ -320,7 +319,6 @@
                         container.insertAdjacentHTML('beforeend', cardHTML);
                     }
                 });
-                // Adicione este trecho no final da função loadDevices(), antes do } catch (error) {
                 markersLayer.clearLayers();
                 currentDevices.forEach(d => {
                     // A API envia loc como GeoJSON [longitude, latitude]
@@ -329,29 +327,21 @@
                         const lat = d.location.coordinates[1];
                         
                         // Define a cor do marcador baseado no nível da água
-                        let color = "#10b981"; // Emerald (Normal)
-                        if (d.waterLevel >= 60 && d.waterLevel <= 79) color = "#f59e0b"; // Amber (Atenção)
-                        else if (d.waterLevel >= 80) color = "#f43f5e"; // Rose (Risco/Enchente)
-
-                        // Criar um ícone em HTML customizado
-                        // index.html - Trecho modificado
-
-                        // index.html - Dentro da função loadDevices()
+                        let color = "#10b981";
+                        if (d.waterLevel >= 60 && d.waterLevel <= 79) color = "#f59e0b";
+                        else if (d.waterLevel >= 80) color = "#f43f5e";
 
                         let iconContent = ''; 
                         let markerClasses = ''; 
 
                         if (d.coverStatus === 'open') {
-                            // Aumentei o font-size de 10px para 16px
                             iconContent = `<span style="color: white; font-size: 14px; font-weight: bold; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">⚠</span>`;
                             markerClasses = 'animate-pulse';
                         }
 
-                        // Mudei width e height de 16px para 32px
                         const markerHtml = `<div class="${markerClasses}" style="background-color: ${color}; width: 24px; height: 24px; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 4px rgba(0,0,0,0.5); position: relative;">${iconContent}</div>`;
                         const customIcon = L.divIcon({ html: markerHtml, className: '' });
 
-                        // Adiciona o marcador e o Pop-up
                         L.marker([lat, lng], { icon: customIcon }).bindPopup(`
                             <div class="text-gray-900">
                                 <h4 class="font-bold border-b pb-1 mb-1">ID: ${d.deviceId}</h4>
@@ -576,7 +566,6 @@
         }
 
         setInterval(() => {
-            // Agora verifica se o Dashboard OU o Mapa estão abertos
             const isDashboardOpen = document.getElementById('tab-dashboard').classList.contains('block');
             const isMapaOpen = document.getElementById('tab-mapa') && document.getElementById('tab-mapa').classList.contains('block');
             
