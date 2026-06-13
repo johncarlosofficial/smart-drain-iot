@@ -237,7 +237,7 @@
                     else if (d.waterLevel >= 80 && d.waterLevel < 100) { statusText = 'RISCO DE ENCHENTE'; statusClass = 'bg-orange-500/10 text-orange-400 border-orange-500/30'; } 
                     else if (d.waterLevel >= 100) { statusText = 'ENCHENTE'; statusClass = 'bg-rose-500/20 text-rose-500 border-rose-500/50 animate-pulse'; }
 
-                    const simStatusText = d.isSimulating ? 'Simulação Ativa' : 'Inativa';
+                    const simStatusText = d.isSimulating ? 'Ativa' : 'Inativa';
                     const simStatusClass = d.isSimulating ? 'text-emerald-400' : 'text-gray-500';
 
                     const cardId = `card-${d.deviceId}`;
@@ -255,6 +255,13 @@
                         document.getElementById(`motor-${d.deviceId}`).className = simStatusClass;
                         document.getElementById(`motor-${d.deviceId}`).innerText = simStatusText;
                         document.getElementById(`cover-${d.deviceId}`).innerText = d.coverStatus === 'open' ? 'ABERTA ⚠️' : 'FECHADA';
+
+                        const mntEl = document.getElementById(`mnt-${d.deviceId}`);
+                        if (mntEl) {
+                            mntEl.innerText = d.lastMaintenance && d.lastMaintenance !== 'N/A' 
+                                ? new Date(d.lastMaintenance).toLocaleDateString('pt-BR', {timeZone: 'UTC'}) 
+                                : 'N/A';
+                        }
                         
                         document.getElementById(`config-${d.deviceId}`).style.display = d.isSimulating ? 'none' : 'flex';
                         
@@ -267,7 +274,7 @@
                         const extraBtns = document.getElementById(`extra-btns-${d.deviceId}`);
                         let btnsHTML = '';
                         if (d.coverStatus === 'open') btnsHTML += `<button onclick="closeCover('${d.deviceId}')" class="w-full bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 text-[10px] uppercase py-2.5 px-1 rounded font-bold border border-amber-500/30 transition-colors text-center mt-1">🔒 Fechar Tampa</button>`;
-                        if (d.waterLevel >= 100 && !d.isDraining) btnsHTML += `<button onclick="sendToLagoon('${d.deviceId}')" class="w-full bg-purple-600/30 text-purple-400 hover:bg-purple-600/50 text-[10px] uppercase py-2.5 px-1 rounded font-bold border border-purple-500/40 transition-colors text-center mt-1 animate-pulse">💧 Enviar para Lagoa</button>`;
+                        if (d.waterLevel >= 100 && !d.isDraining) btnsHTML += `<button onclick="sendToLagoon('${d.deviceId}')" class="w-full bg-purple-600/30 text-purple-400 hover:bg-purple-600/50 text-[10px] uppercase py-2.5 px-1 rounded font-bold border border-purple-500/40 transition-colors text-center mt-1 animate-pulse">💧 Enviar para Lagoa de Captação</button>`;
                         extraBtns.innerHTML = btnsHTML;
 
                     } else {
@@ -278,7 +285,7 @@
                                     <div class="flex justify-between items-start mb-4">
                                         <div>
                                             <h3 class="text-lg font-bold text-white">ID: ${d.deviceId}</h3>
-                                            <p class="text-xs text-gray-500 mt-1">Status motor: <span id="motor-${d.deviceId}" class="${simStatusClass}">${simStatusText}</span></p>
+                                            <p class="text-xs text-gray-500 mt-1">Simulação: <span id="motor-${d.deviceId}" class="${simStatusClass}">${simStatusText}</span></p>
                                         </div>
                                         <span id="badge-${d.deviceId}" class="px-3 py-1 text-xs font-black rounded-full border ${statusClass} text-center">${statusText}</span>
                                     </div>
@@ -286,6 +293,13 @@
                                         <div class="flex justify-between text-sm"><span class="text-gray-400">Nível Atual:</span> <span id="wl-txt-${d.deviceId}" class="font-bold text-white">${d.waterLevel}%</span></div>
                                         <div class="w-full bg-gray-800 h-2 rounded-full overflow-hidden"><div id="wl-bar-${d.deviceId}" class="bg-cyan-500 h-full transition-all duration-500" style="width: ${d.waterLevel}%"></div></div>
                                         <div class="flex justify-between text-sm pt-2"><span class="text-gray-400">Tampa:</span> <span id="cover-${d.deviceId}" class="font-mono text-white">${d.coverStatus === 'open' ? 'ABERTA ⚠️' : 'FECHADA'}</span></div>
+
+                                        <div class="flex justify-between text-sm pt-2 border-t border-gray-800 mt-2">
+                                            <span class="text-gray-400">Manutenção:</span> 
+                                            <span id="mnt-${d.deviceId}" class="font-mono text-gray-400">
+                                                ${d.lastMaintenance && d.lastMaintenance !== 'N/A' ? new Date(d.lastMaintenance).toLocaleDateString('pt-BR', {timeZone: 'UTC'}) : 'N/A'}
+                                            </span>
+                                        </div>
                                     </div>
                                 </div>
                                 
@@ -311,7 +325,7 @@
                                     </button>
                                     <div id="extra-btns-${d.deviceId}" class="col-span-2 flex flex-col">
                                         ${d.coverStatus === 'open' ? `<button onclick="closeCover('${d.deviceId}')" class="w-full bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 text-[10px] uppercase py-2.5 px-1 rounded font-bold border border-amber-500/30 transition-colors text-center mt-1">🔒 Fechar Tampa</button>` : ''}
-                                        ${d.waterLevel >= 100 && !d.isDraining ? `<button onclick="sendToLagoon('${d.deviceId}')" class="w-full bg-purple-600/30 text-purple-400 hover:bg-purple-600/50 text-[10px] uppercase py-2.5 px-1 rounded font-bold border border-purple-500/40 transition-colors text-center mt-1 animate-pulse">💧 Enviar para Lagoa</button>` : ''}
+                                        ${d.waterLevel >= 100 && !d.isDraining ? `<button onclick="sendToLagoon('${d.deviceId}')" class="w-full bg-purple-600/30 text-purple-400 hover:bg-purple-600/50 text-[10px] uppercase py-2.5 px-1 rounded font-bold border border-purple-500/40 transition-colors text-center mt-1 animate-pulse">💧 Enviar para Lagoa de Captação</button>` : ''}
                                     </div>
                                 </div>
                             </div>
