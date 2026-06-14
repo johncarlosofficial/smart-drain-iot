@@ -29,7 +29,13 @@ const coverCooldown = {};
 const drainingDevices = {};
 
 function isValidCoordinates(lat, lng) {
-    return lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
+    // Limites geográficos aproximados de Natal/RN
+    const minLat = -5.9000;
+    const maxLat = -5.7000;
+    const minLng = -35.3000;
+    const maxLng = -35.1500;
+    
+    return lat >= minLat && lat <= maxLat && lng >= minLng && lng <= maxLng;
 }
 
 // Inicialização Automatizada do FIWARE

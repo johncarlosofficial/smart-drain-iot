@@ -192,7 +192,7 @@
 
         function initMap() {
             // Inicializa o mapa (coordenadas de exemplo: Natal/RN)
-            map = L.map('map').setView([-5.7945, -35.2110], 12);
+            map = L.map('map').setView([-5.7945, -35.2110], 11);
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '© OpenStreetMap contributors',
                 maxZoom: 19
@@ -380,8 +380,12 @@
             }
 
             // 2. Validação matemática de coordenadas
-            if (lat < -90 || lat > 90) return alert('⚠️ A latitude deve estar entre -90 e 90.');
-            if (lng < -180 || lng > 180) return alert('⚠️ A longitude deve estar entre -180 e 180.');
+            const minLat = -5.9000, maxLat = -5.7000;
+            const minLng = -35.3000, maxLng = -35.1500;
+
+            if (lat < minLat || lat > maxLat || lng < minLng || lng > maxLng) {
+                return alert(`⚠️ Erro: O bueiro deve estar localizado em Natal/RN!\n\nLatitude permitida: ${minLat} a ${maxLat}\nLongitude permitida: ${minLng} a ${maxLng}`);
+            }
 
             const payload = {
                 deviceId: deviceId,
@@ -434,9 +438,13 @@
                 return alert('⚠️ Erro: Você tentou alterar o ID para um que já existe!');
             }
 
-            // 2. Validação matemática de coordenadas
-            if (lat < -90 || lat > 90) return alert('⚠️ A latitude deve estar entre -90 e 90.');
-            if (lng < -180 || lng > 180) return alert('⚠️ A longitude deve estar entre -180 e 180.');
+            // 2. Validação geográfica para Natal/RN
+            const minLat = -5.9000, maxLat = -5.7000;
+            const minLng = -35.3000, maxLng = -35.1500;
+
+            if (lat < minLat || lat > maxLat || lng < minLng || lng > maxLng) {
+                return alert(`⚠️ Erro: O bueiro deve estar localizado em Natal/RN!\n\nLatitude permitida: ${minLat} a ${maxLat}\nLongitude permitida: ${minLng} a ${maxLng}`);
+            }
 
             const payload = {
                 deviceId: newId,
