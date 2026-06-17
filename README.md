@@ -112,7 +112,7 @@ Siga os passos abaixo no terminal para rodar a aplicação:
 
 ### 5.1. Iniciar a Infraestrutura FIWARE (Docker)
 
-Suba todos os containers necessários (Orion, IoT Agent, MongoDB, CrateDB, QuantumLeap e Grafana) em segundo plano:
+Suba todos os containers necessários (Orion, IoT Agent, MongoDB, CrateDB e QuantumLeap) em segundo plano:
 
 ```bash
 docker compose up -d
