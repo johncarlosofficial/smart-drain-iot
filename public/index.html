@@ -172,12 +172,16 @@
             document.querySelectorAll('.tab-content').forEach(el => el.classList.replace('block', 'hidden'));
             document.getElementById(`tab-${tabName}`).classList.replace('hidden', 'block');
             
-            // Reseta a cor de todos os botões da navegação
-            document.querySelectorAll('nav button').forEach(btn => btn.classList.remove('bg-cyan-600', 'text-white'));
+            // Reseta todos os botões da navegação para o estado inativo (adicionando o cinza)
+            document.querySelectorAll('nav button').forEach(btn => {
+                btn.classList.remove('bg-cyan-600', 'text-white');
+                btn.classList.add('text-gray-400');
+            });
             
             // Se a aba tiver um botão na navegação (como dashboard e mapa), acende ele
             const navBtn = document.getElementById(`btn-${tabName}`);
             if (navBtn) {
+                navBtn.classList.remove('text-gray-400');
                 navBtn.classList.add('bg-cyan-600', 'text-white');
             }
 

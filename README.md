@@ -1,6 +1,48 @@
-# ⚡ Smart Drain Monitoring (FIWARE + Node.js)
+# Smart Drain Monitoring (FIWARE + Node.js)
 
 Este é um projeto Full Stack (Node.js + Express + TailwindCSS) para o monitoramento inteligente de bueiros utilizando o ecossistema **FIWARE**. A aplicação realiza o provisionamento automático de componentes, registra novos bueiros via IoT Agent (JSON over HTTP), gerencia o Context Broker (Orion), assina a persistência temporal (QuantumLeap) e monitora tudo em tempo real através de um Dashboard interativo com simulador de chuva.
+
+![Tela de Dashboard](screenshots/dashboard.png)
+
+![Tela de Dashboard](screenshots/mapa.png)
+
+![Tela de Dashboard](screenshots/criar.png)
+
+![Tela de Dashboard](screenshots/editar.png)
+
+## Motor de Simulação
+
+O projeto possui um motor interno no backend que simula o comportamento físico dos bueiros em tempo real. Ele altera variáveis de telemetria, como o nível da água e o estado da tampa, com base em diferentes parâmetros enviados pelo usuário.
+
+### 1. Velocidades de Simulação
+
+A velocidade dita a frequência (intervalo) com que o servidor processa a física do bueiro e envia novas telemetrias para o IoT Agent do FIWARE. As opções disponíveis na rota `/api/simulate/auto/start` são:
+
+* **Lenta (`speed: "lenta"`):** O ciclo de atualização ocorre a cada 4 segundos (4000ms).
+* **Média (`speed: "media"` ou valor padrão se omitido):** O ciclo ocorre a cada 2 segundos (2000ms).
+* **Rápida (`speed: "rapida"`):** O ciclo ocorre a cada 1 segundo (1000ms).
+
+### 2. Cenários Climáticos (Nível da Água)
+
+A propriedade `simulateRain` determina a progressão do alagamento do bueiro ao longo dos ciclos de simulação:
+
+* **Com Chuva (`simulateRain: true`):** Simula precipitação contínua. O nível da água não desce; pelo contrário, recebe um incremento randômico entre +2 e +9 pontos a cada ciclo, alagando rapidamente até encontrar o limite máximo de 100%.
+* **Sem Chuva / Normal (`simulateRain: false`):** Simula o tempo firme. O nível de água sofre uma oscilação natural para baixo, subtraindo randômicamente de -1 a -4 pontos a cada ciclo até secar totalmente e estabilizar em 0%.
+
+### 3. Escoamento / Lagoa de Captação (Drenagem)
+
+A função de esvaziamento de emergência (`/api/devices/:deviceId/drain`) sobrepõe as simulações climáticas atuais para escoar o bueiro em direção à lagoa de captação ou galeria pluvial principal:
+
+* **Redução Agressiva:** Independentemente do tempo de simulação, enquanto estiver em drenagem, o bueiro perde continuamente 8 pontos de nível de água por ciclo.
+* **Nível Seguro:** A drenagem não esvazia o bueiro até 0%. Ela cessa automaticamente assim que o nível da água chega à cota de segurança de 40%.
+* **Fim da Tempestade:** Se o bueiro estiver sob efeito contínuo de Chuva (`simulateRain: true`), ao final do processo de drenagem o sistema interpretará que a tempestade passou e mudará o comportamento para Sem Chuva (`simulateRain: false`), normalizando o sistema.
+
+### 4. Comportamento Aleatório da Tampa e Cooldown
+
+A simulação inclui imprevistos urbanos:
+
+* **Abertura Acidental:** Se a tampa de um bueiro monitorado estiver fechada (`closed`), existe uma chance aproximada de **8%** em cada ciclo da tampa se abrir espontaneamente (`open`), simulando o deslocamento por força da água ou furtos.
+* **Mecanismo de Cooldown:** Para permitir manutenções efetivas pelo Dashboard, quando um comando manual de fechamento de tampa (`/close-cover`) é emitido, a simulação daquele bueiro entra em estado de *cooldown* (descanso) de **5 minutos** (300.000ms). Durante esta janela, a tampa estará protegida contra aberturas acidentais.
 
 ## Pré-requisitos
 

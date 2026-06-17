@@ -41,7 +41,7 @@ function isValidCoordinates(lat, lng) {
 // Inicialização Automatizada do FIWARE
 async function initFiware() {
     try {
-        console.log('🔄 Inicializando configurações no FIWARE...');
+        console.log('Inicializando configurações no FIWARE...');
         
         await axios.post(`${IOTA_URL}/iot/services`, {
             services: [{
@@ -52,7 +52,7 @@ async function initFiware() {
             }]
         }, { headers: fiwareHeaders }).catch(err => {
             if (err.response && err.response.status === 409) {
-                console.log('ℹ️ Service Group já configurado.');
+                console.log('Service Group já configurado.');
             } else throw err;
         });
 
@@ -62,9 +62,9 @@ async function initFiware() {
             for (let sub of subs.data) {
                 await axios.delete(`${ORION_URL}/v2/subscriptions/${sub.id}`, { headers: fiwareHeaders });
             }
-            console.log('🧹 Inscrições antigas do Orion limpas com sucesso.');
+            console.log('Inscrições antigas do Orion limpas com sucesso.');
         } catch (e) {
-            console.log('ℹ️ Nenhuma inscrição anterior encontrada para limpar.');
+            console.log('Nenhuma inscrição anterior encontrada para limpar.');
         }
 
         // CRIAÇÃO DA SUBSCRIPTION CORRETA PARA HISTÓRICO
@@ -84,10 +84,10 @@ async function initFiware() {
             throttling: 1
         }, { headers: fiwareHeaders });
         
-        console.log('📈 Subscription para o QuantumLeap (Base de Dados Temporal) criada!');
-        console.log('✅ FIWARE totalmente integrado e pronto!');
+        console.log('Subscription para o QuantumLeap (Base de Dados Temporal) criada!');
+        console.log('FIWARE totalmente integrado e pronto!');
     } catch (error) {
-        console.error('❌ Erro na comunicação inicial com o FIWARE.', error.message);
+        console.error('Erro na comunicação inicial com o FIWARE.', error.message);
     }
 }
 
@@ -417,6 +417,6 @@ app.post('/api/simulate/auto/stop', (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`🚀 Servidor a correr em http://localhost:${PORT}`);
+    console.log(`Servidor a correr em http://localhost:${PORT}`);
     setTimeout(initFiware, 3000);
 });
