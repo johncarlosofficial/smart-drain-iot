@@ -10,11 +10,11 @@ Este é um projeto Full Stack (Node.js + Express + TailwindCSS) para o monitoram
 
 ![Tela de Dashboard](screenshots/editar.png)
 
-## Motor de Simulação
+## 1. Motor de Simulação
 
 O projeto possui um motor interno no backend que simula o comportamento físico dos bueiros em tempo real. Ele altera variáveis de telemetria, como o nível da água e o estado da tampa, com base em diferentes parâmetros enviados pelo usuário.
 
-### 1. Velocidades de Simulação
+### 1.1. Velocidades de Simulação
 
 A velocidade dita a frequência (intervalo) com que o servidor processa a física do bueiro e envia novas telemetrias para o IoT Agent do FIWARE. As opções disponíveis na rota `/api/simulate/auto/start` são:
 
@@ -22,14 +22,14 @@ A velocidade dita a frequência (intervalo) com que o servidor processa a físic
 * **Média (`speed: "media"` ou valor padrão se omitido):** O ciclo ocorre a cada 2 segundos (2000ms).
 * **Rápida (`speed: "rapida"`):** O ciclo ocorre a cada 1 segundo (1000ms).
 
-### 2. Cenários Climáticos (Nível da Água)
+### 1.2. Cenários Climáticos (Nível da Água)
 
 A propriedade `simulateRain` determina a progressão do alagamento do bueiro ao longo dos ciclos de simulação:
 
 * **Com Chuva (`simulateRain: true`):** Simula precipitação contínua. O nível da água não desce; pelo contrário, recebe um incremento randômico entre +2 e +9 pontos a cada ciclo, alagando rapidamente até encontrar o limite máximo de 100%.
 * **Sem Chuva / Normal (`simulateRain: false`):** Simula o tempo firme. O nível de água sofre uma oscilação natural para baixo, subtraindo randômicamente de -1 a -4 pontos a cada ciclo até secar totalmente e estabilizar em 0%.
 
-### 3. Escoamento / Lagoa de Captação (Drenagem)
+### 1.3. Escoamento / Lagoa de Captação (Drenagem)
 
 A função de esvaziamento de emergência (`/api/devices/:deviceId/drain`) sobrepõe as simulações climáticas atuais para escoar o bueiro em direção à lagoa de captação ou galeria pluvial principal:
 
@@ -37,14 +37,14 @@ A função de esvaziamento de emergência (`/api/devices/:deviceId/drain`) sobre
 * **Nível Seguro:** A drenagem não esvazia o bueiro até 0%. Ela cessa automaticamente assim que o nível da água chega à cota de segurança de 40%.
 * **Fim da Tempestade:** Se o bueiro estiver sob efeito contínuo de Chuva (`simulateRain: true`), ao final do processo de drenagem o sistema interpretará que a tempestade passou e mudará o comportamento para Sem Chuva (`simulateRain: false`), normalizando o sistema.
 
-### 4. Comportamento Aleatório da Tampa e Cooldown
+### 1.4. Comportamento Aleatório da Tampa e Cooldown
 
 A simulação inclui imprevistos urbanos:
 
 * **Abertura Acidental:** Se a tampa de um bueiro monitorado estiver fechada (`closed`), existe uma chance aproximada de **8%** em cada ciclo da tampa se abrir espontaneamente (`open`), simulando o deslocamento por força da água ou furtos.
 * **Mecanismo de Cooldown:** Para permitir manutenções efetivas pelo Dashboard, quando um comando manual de fechamento de tampa (`/close-cover`) é emitido, a simulação daquele bueiro entra em estado de *cooldown* (descanso) de **5 minutos** (300.000ms). Durante esta janela, a tampa estará protegida contra aberturas acidentais.
 
-## Pré-requisitos
+## 2. Pré-requisitos
 
 Antes de começar, certifique-se de ter instalado em sua máquina:
 
@@ -52,11 +52,11 @@ Antes de começar, certifique-se de ter instalado em sua máquina:
 * **Node.js** (versão 18 ou superior)
 * **NPM** (gerenciador de pacotes do Node)
 
-## Como Executar o Projeto
+## 3. Como Executar o Projeto
 
 Siga os passos abaixo no terminal para rodar a aplicação:
 
-### 1. Iniciar a Infraestrutura FIWARE (Docker)
+### 3.1. Iniciar a Infraestrutura FIWARE (Docker)
 
 Suba todos os containers necessários (Orion, IoT Agent, MongoDB, CrateDB, QuantumLeap e Grafana) em segundo plano:
 
@@ -64,7 +64,7 @@ Suba todos os containers necessários (Orion, IoT Agent, MongoDB, CrateDB, Quant
 docker compose up -d
 ```
 
-### 2. Verificar o Status dos Containers
+### 3.2. Verificar o Status dos Containers
 
 Garanta que todos os serviços estão de pé e rodando corretamente:
 
@@ -72,7 +72,7 @@ Garanta que todos os serviços estão de pé e rodando corretamente:
 docker ps
 ```
 
-### 3. Instalar as Dependências do Node.js
+### 3.3. Instalar as Dependências do Node.js
 
 Se for a primeira vez rodando o projeto, instale os pacotes necessários:
 
@@ -80,7 +80,7 @@ Se for a primeira vez rodando o projeto, instale os pacotes necessários:
 npm install
 ```
 
-### 4. Iniciar o Servidor Backend e Frontend
+### 3.4. Iniciar o Servidor Backend e Frontend
 
 Inicie a aplicação Node.js. O próprio servidor se encarregará de fazer o *provisionamento inicial* (Service Group e Subscription) no FIWARE após 3 segundos:
 
@@ -88,13 +88,15 @@ Inicie a aplicação Node.js. O próprio servidor se encarregará de fazer o *pr
 npm start
 ```
 
-## Acesso à Aplicação
+## 4. Acesso à Aplicação
 
 Assim que o servidor iniciar com sucesso, abra o seu navegador e acesse:
 
-* **Dashboard Web:** `http://localhost:3080`
+```text
+http://localhost:3080
+```
 
-## Portas da Aplicação e Serviços
+## 5. Portas da Aplicação e Serviços
 
 Abaixo estão as portas utilizadas pelos serviços na arquitetura e suas respectivas funções:
 
@@ -112,28 +114,25 @@ Abaixo estão as portas utilizadas pelos serviços na arquitetura e suas respect
 
 * **MongoDB - Porta `27017`:** Banco de dados NoSQL utilizado internamente pelo Orion para salvar as entidades, metadados e inscrições atuais.
 
-**Chave de API (API Key):**
-O IoT Agent está configurado para utilizar a seguinte chave de segurança na validação do fluxo de envio de dados:
+* **Chave de API - API Key `1234`:** O IoT Agent está configurado para utilizar essa chave de segurança na validação do fluxo de envio de dados.
 
-* `API_KEY`: `1234`
-
-## Exemplos de Requisições via API (cURL)
+## 6. Exemplos de Requisições via API (cURL)
 
 Como navegadores realizam apenas requisições `GET` pela barra de endereços, utilize o seu terminal (via comandos `curl`) ou ferramentas como Postman e Insomnia para testar as rotas de criação, edição ou ação.
 
-### 1. Listar todos os bueiros cadastrados
+### 6.1. Listar todos os bueiros cadastrados
 
 ```bash
 curl -X GET http://localhost:3080/api/devices
 ```
 
-### 2. Buscar histórico temporal de um bueiro (QuantumLeap)
+### 6.2. Buscar histórico temporal de um bueiro (QuantumLeap)
 
 ```bash
 curl -X GET http://localhost:3080/api/devices/1/history
 ```
 
-### 3. Cadastrar um novo bueiro
+### 6.3. Cadastrar um novo bueiro
 
 ```bash
 curl -X POST http://localhost:3080/api/devices \
@@ -146,7 +145,7 @@ curl -X POST http://localhost:3080/api/devices \
 }'
 ```
 
-### 4. Atualizar os dados ou status de um bueiro
+### 6.4. Atualizar os dados ou status de um bueiro
 
 ```bash
 curl -X PUT http://localhost:3080/api/devices/1 \
@@ -161,19 +160,19 @@ curl -X PUT http://localhost:3080/api/devices/1 \
 }'
 ```
 
-### 5. Fechar a tampa de um bueiro remotamente
+### 6.5. Fechar a tampa de um bueiro remotamente
 
 ```bash
 curl -X POST http://localhost:3080/api/devices/1/close-cover
 ```
 
-### 6. Iniciar esvaziamento de emergência (Drenagem)
+### 6.6. Iniciar esvaziamento de emergência (Drenagem)
 
 ```bash
 curl -X POST http://localhost:3080/api/devices/1/drain
 ```
 
-### 7. Iniciar simulação automática (Nível da água/Chuva)
+### 6.7. Iniciar simulação automática (Nível da água/Chuva)
 
 *O parâmetro speed aceita: "lenta", "media" ou "rapida".*
 
@@ -187,7 +186,7 @@ curl -X POST http://localhost:3080/api/simulate/auto/start \
 }'
 ```
 
-### 8. Parar a simulação automática
+### 6.8. Parar a simulação automática
 
 ```bash
 curl -X POST http://localhost:3080/api/simulate/auto/stop \
@@ -197,7 +196,7 @@ curl -X POST http://localhost:3080/api/simulate/auto/stop \
 }'
 ```
 
-### 9. Excluir um bueiro permanentemente
+### 6.9. Excluir um bueiro permanentemente
 
 ```bash
 curl -X DELETE http://localhost:3080/api/devices/1
