@@ -17,7 +17,6 @@
             <nav class="flex flex-wrap gap-2 bg-gray-950 p-1.5 rounded-lg border border-gray-700">
                 <button onclick="switchTab('dashboard')" id="btn-dashboard" class="px-4 py-2 rounded-md font-medium text-sm transition-all bg-cyan-600 text-white">Dashboard</button>
                 <button onclick="switchTab('mapa')" id="btn-mapa" class="px-4 py-2 rounded-md font-medium text-sm transition-all text-gray-400 hover:text-white">Mapa</button>
-                <button onclick="switchTab('editar')" id="btn-editar" class="hidden px-4 py-2 rounded-md font-medium text-sm transition-all text-gray-400 hover:text-white">Editar</button>
             </nav>
         </div>
     </header>
@@ -63,7 +62,10 @@
                     <label class="block text-xs uppercase tracking-wider font-bold text-gray-400 mb-2">Data da última manutenção</label>
                     <input type="date" id="cad-date" class="w-full bg-gray-950 border border-gray-700 rounded-lg p-3 text-white focus:outline-none focus:border-cyan-500">
                 </div>
-                <button type="submit" class="w-full bg-cyan-600 hover:bg-cyan-700 py-3 rounded-lg font-bold transition-colors mt-2">Cadastrar Bueiro</button>
+                <div class="grid grid-cols-2 gap-4 mt-6">
+                <button type="button" onclick="switchTab('dashboard')" class="w-full bg-gray-700 hover:bg-gray-600 py-3 rounded-lg font-bold transition-colors text-white">Cancelar</button>
+                <button type="submit" class="w-full bg-cyan-600 hover:bg-cyan-700 py-3 rounded-lg font-bold transition-colors text-white">Cadastrar Bueiro</button>
+            </div>
             </form>
         </section>
 
@@ -102,7 +104,10 @@
                     <label class="block text-xs uppercase tracking-wider font-bold text-gray-400 mb-2">Data da última manutenção</label>
                     <input type="date" id="edit-date" class="w-full bg-gray-950 border border-gray-700 rounded-lg p-3 text-white focus:outline-none focus:border-emerald-500">
                 </div>
-                <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 py-3 rounded-lg font-bold transition-colors mt-2">Salvar Alterações</button>
+                <div class="grid grid-cols-2 gap-4 mt-6">
+                    <button type="button" onclick="switchTab('dashboard')" class="w-full bg-gray-700 hover:bg-gray-600 py-3 rounded-lg font-bold transition-colors text-white">Cancelar</button>
+                    <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 py-3 rounded-lg font-bold transition-colors text-white">Salvar Alterações</button>
+                </div>
             </form>
             <button onclick="deleteDevice()" class="w-full bg-rose-600 hover:bg-rose-700 py-3 rounded-lg font-bold transition-colors mt-4 shadow-lg shadow-rose-500/20 text-white">Excluir Bueiro</button>
         </section>
@@ -163,20 +168,20 @@
         }
 
         function switchTab(tabName) {
+            // Esconde todas as abas e mostra a selecionada
             document.querySelectorAll('.tab-content').forEach(el => el.classList.replace('block', 'hidden'));
             document.getElementById(`tab-${tabName}`).classList.replace('hidden', 'block');
             
+            // Reseta a cor de todos os botões da navegação
             document.querySelectorAll('nav button').forEach(btn => btn.classList.remove('bg-cyan-600', 'text-white'));
             
-            const btnEditar = document.getElementById('btn-editar');
-            if(tabName === 'editar') {
-                btnEditar.classList.remove('hidden');
-                btnEditar.classList.add('bg-cyan-600', 'text-white');
-            } else {
-                btnEditar.classList.add('hidden');
-                document.getElementById(`btn-${tabName}`).classList.add('bg-cyan-600', 'text-white');
+            // Se a aba tiver um botão na navegação (como dashboard e mapa), acende ele
+            const navBtn = document.getElementById(`btn-${tabName}`);
+            if (navBtn) {
+                navBtn.classList.add('bg-cyan-600', 'text-white');
             }
 
+            // Carrega dados se voltar para abas principais
             if(tabName === 'dashboard' || tabName === 'simulacao' || tabName === 'mapa') {
                 loadDevices();
             }
