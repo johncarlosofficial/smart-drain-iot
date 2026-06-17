@@ -210,7 +210,7 @@
                 const container = document.getElementById('devices-list');
                 
                 if (currentDevices.length === 0) {
-                    container.innerHTML = `<div class="col-span-full text-center py-12 text-gray-500">Nenhum bueiro cadastrado. Acesse a aba de cadastro.</div>`;
+                    container.innerHTML = `<div class="col-span-full text-center py-12 text-gray-500">Nenhum bueiro cadastrado.</div>`;
                     return;
                 } else if (container.querySelector('.col-span-full')) {
                     container.innerHTML = ''; // Limpa a mensagem de vazio
