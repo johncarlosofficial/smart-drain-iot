@@ -1,63 +1,274 @@
+name: fiware-smartcity
+
 services:
+  # ============================================================
+  # DATABASES
+  # ============================================================
 
   mongo-db:
-    image: mongo:4.4
-    container_name: mongo-db
+    image: mongo:6.0
+    container_name: fiware-mongo
+    hostname: mongo-db
+    restart: unless-stopped
+    command: --bind_ip_all
     ports:
       - "27017:27017"
-
-  orion:
-    image: fiware/orion:3.10.1
-    platform: linux/amd64
-    container_name: orion
-    depends_on:
-      - mongo-db
-    ports:
-      - "1026:1026"
-    command: -dbhost mongo-db -port 1026 -logLevel DEBUG
-
-  iot-agent:
-    image: fiware/iotagent-json
-    platform: linux/amd64
-    container_name: iot-agent
-    depends_on:
-      - mongo-db
-      - orion
-    ports:
-      - "4041:4041"
-      - "7896:7896"
-    environment:
-      - IOTA_CB_HOST=orion
-      - IOTA_CB_PORT=1026
-
-      - IOTA_NORTH_PORT=4041
-      - IOTA_HTTP_PORT=7896
-
-      - IOTA_PROVIDER_URL=http://iot-agent:4041
-
-      - IOTA_REGISTRY_TYPE=mongodb
-
-      - IOTA_MONGO_HOST=mongo-db
-      - IOTA_MONGO_PORT=27017
-      - IOTA_MONGO_DB=iotagentjson
-      - IOTA_MONGO_URI=mongodb://mongo-db:27017
+    volumes:
+      - mongo-db:/data/db
+    networks:
+      - fiware-net
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   crate-db:
-    image: crate:4.6.6
-    platform: linux/amd64
-    container_name: crate-db
+    image: crate:latest
+    container_name: fiware-crate
+    hostname: crate-db
+    restart: unless-stopped
     ports:
-      - "4200:4200"
-      - "5432:5432"
+      - "4200:4200" # CrateDB Admin UI / HTTP
+      - "4300:4300" # Transport
+    command: >
+      crate
+      -Cauth.host_based.enabled=false
+      -Ccluster.name=fiware-cluster
+      -Chttp.cors.enabled=true
+      -Chttp.cors.allow-origin="*"
+      -Cdiscovery.type=single-node
+    environment:
+      - CRATE_HEAP_SIZE=1g
+    volumes:
+      - crate-db:/data
+    networks:
+      - fiware-net
+
+  redis-db:
+    image: redis:7
+    container_name: fiware-redis
+    hostname: redis-db
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-db:/data
+    networks:
+      - fiware-net
+
+  mysql-db:
+    image: mysql:5.7
+    container_name: fiware-mysql
+    hostname: mysql-db
+    restart: unless-stopped
+    ports:
+      - "3306:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=secret
+      - MYSQL_ROOT_HOST=%
+      - MYSQL_DATABASE=idm
+    volumes:
+      - mysql-db:/var/lib/mysql
+    networks:
+      - fiware-net
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -psecret || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ============================================================
+  # CORE CONTEXT MANAGEMENT
+  # ============================================================
+
+  orion-ld:
+    image: quay.io/fiware/orion-ld:1.12.0
+    container_name: fiware-orion-ld
+    hostname: orion-ld
+    restart: unless-stopped
+    depends_on:
+      mongo-db:
+        condition: service_healthy
+    ports:
+      - "1026:1026"
+    environment:
+      - ORIONLD_MONGO_HOST=mongo-db
+      - ORIONLD_MONGO_DB=orion
+    command: -logLevel DEBUG
+    networks:
+      - fiware-net
+
+  # ============================================================
+  # IOT INGESTION
+  # ============================================================
+
+  iot-agent-json:
+    image: quay.io/fiware/iotagent-json:latest
+    container_name: fiware-iot-agent-json
+    hostname: iot-agent-json
+    restart: unless-stopped
+    depends_on:
+      - orion-ld
+      - mongo-db
+    ports:
+      - "4041:4041" # Northbound API: cadastro de devices/service groups
+      - "7896:7896" # Southbound API: envio dos sensores
+    environment:
+      - IOTA_CB_HOST=orion-ld
+      - IOTA_CB_PORT=1026
+      - IOTA_NORTH_PORT=4041
+      - IOTA_HTTP_PORT=7896
+      - IOTA_PROVIDER_URL=http://iot-agent-json:4041
+      - IOTA_DEFAULT_RESOURCE=/iot/json
+
+      # Registry dos dispositivos
+      - IOTA_REGISTRY_TYPE=mongodb
+      - IOTA_MONGO_URI=mongodb://mongo-db:27017/iotagentjson
+
+      # NGSI-LD
+      - IOTA_CB_NGSI_VERSION=LD
+      - IOTA_JSON_LD_CONTEXT=https://uri.etsi.org/ngsi-ld/v1/ngsi-ld-core-context.jsonld
+      - IOTA_FALLBACK_TENANT=smartcity
+      - IOTA_FALLBACK_PATH=/
+
+      # Qualidade dos dados
+      - IOTA_TIMESTAMP=true
+      - IOTA_AUTOCAST=true
+      - IOTA_LOG_LEVEL=INFO
+
+      # Para o MVP via HTTP. Se forem usar MQTT depois, mudar isso.
+      - IOTA_MQTT_DISABLED=true
+      - IOTA_AMQP_DISABLED=true
+    networks:
+      - fiware-net
+
+  # ============================================================
+  # HISTORICAL DATA
+  # ============================================================
 
   quantumleap:
-    image: fiware/quantum-leap
-    platform: linux/amd64
-    container_name: quantumleap
+    image: orchestracities/quantumleap:latest
+    container_name: fiware-quantumleap
+    hostname: quantumleap
+    restart: unless-stopped
     depends_on:
       - crate-db
-      - orion
+      - redis-db
     ports:
       - "8668:8668"
     environment:
       - CRATE_HOST=crate-db
+      - REDIS_HOST=redis-db
+      - REDIS_PORT=6379
+      - LOGLEVEL=DEBUG
+    networks:
+      - fiware-net
+
+  # ============================================================
+  # DASHBOARDS
+  # ============================================================
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: fiware-grafana
+    hostname: grafana
+    restart: unless-stopped
+    depends_on:
+      - crate-db
+    ports:
+      - "3003:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_INSTALL_PLUGINS=orchestracities-map-panel,grafana-clock-panel,grafana-worldmap-panel
+    volumes:
+      - grafana:/var/lib/grafana
+    networks:
+      - fiware-net
+
+  # ============================================================
+  # SECURITY: KEYROCK + WILMA
+  # ============================================================
+
+  keyrock:
+    image: fiware/idm:latest
+    container_name: fiware-keyrock
+    hostname: keyrock
+    restart: unless-stopped
+    depends_on:
+      mysql-db:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    environment:
+      - IDM_DB_HOST=mysql-db
+      - IDM_DB_PORT=3306
+      - IDM_DB_USER=root
+      - IDM_DB_PASS=secret
+      - IDM_DB_NAME=idm
+      - IDM_DB_DIALECT=mysql
+      - IDM_DB_SEED=true
+      - IDM_DB_MIGRATE=true
+
+      - IDM_HOST=http://localhost:3000
+      - IDM_PORT=3000
+      - IDM_HTTPS_ENABLED=false
+      - IDM_DEBUG=true
+
+      - IDM_ADMIN_USER=admin
+      - IDM_ADMIN_EMAIL=admin@test.com
+      - IDM_ADMIN_PASS=1234
+    networks:
+      - fiware-net
+
+  wilma:
+    image: fiware/pep-proxy:latest
+    container_name: fiware-wilma
+    hostname: wilma
+    restart: unless-stopped
+    depends_on:
+      - keyrock
+      - orion-ld
+    ports:
+      - "1027:1027"
+    environment:
+      # Wilma exposto na porta 1027
+      - PEP_PROXY_PORT=1027
+
+      # Keyrock
+      - PEP_PROXY_IDM_HOST=keyrock
+      - PEP_PROXY_IDM_PORT=3000
+      - PEP_PROXY_IDM_SSL_ENABLED=false
+
+      # Serviço protegido: Orion-LD
+      - PEP_PROXY_APP_HOST=orion-ld
+      - PEP_PROXY_APP_PORT=1026
+      - PEP_PROXY_APP_SSL_ENABLED=false
+
+      # Para MVP: autorização avançada desativada.
+      # Ainda será necessário configurar app/PEP no Keyrock para proteção real.
+      - PEP_PROXY_AUTH_ENABLED=false
+
+      # Placeholders: depois substituam pelos dados da aplicação criada no Keyrock.
+      - PEP_PROXY_APP_ID=orion-ld-app
+      - PEP_PROXY_USERNAME=pep_proxy
+      - PEP_PROXY_PASSWORD=pep_proxy_password
+      - PEP_PROXY_TOKEN_SECRET=changeme
+      - PEP_PROXY_MAGIC_KEY=changeme
+
+      # Libera alguns paths úteis sem autenticação, se necessário.
+      - PEP_PROXY_PUBLIC_PATHS=/version,/health
+    networks:
+      - fiware-net
+
+networks:
+  fiware-net:
+    driver: bridge
+
+volumes:
+  mongo-db:
+  crate-db:
+  redis-db:
+  mysql-db:
+  grafana:

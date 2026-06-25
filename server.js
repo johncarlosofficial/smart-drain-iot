@@ -7,10 +7,10 @@ const app = express();
 const PORT = 3080;
 
 // Configurações do FIWARE
-const IOTA_URL = 'http://localhost:4041';
-const IOTA_DATA_URL = 'http://localhost:7896';
-const ORION_URL = 'http://localhost:1026';
-const QUANTUMLEAP_URL = 'http://localhost:8668';
+const IOTA_URL = 'http://10.7.52.55:4041'; 
+const IOTA_DATA_URL = 'http://10.7.52.55:7896'; 
+const ORION_URL = 'http://10.7.52.55:1026';
+const QUANTUMLEAP_URL = 'http://10.7.52.55:8668'; 
 const API_KEY = '1234';
 
 app.use(cors());
@@ -18,9 +18,18 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 const fiwareHeaders = {
+    'Content-Type': 'application/ld+json',
+    'NGSILD-Tenant': 'openiot'
+};
+
+// Headers legados obrigatórios especificamente para a gerência interna do IoT Agent
+const iotaHeaders = {
     'fiware-service': 'openiot',
     'fiware-servicepath': '/'
 };
+
+// Define o @context padrão do FIWARE
+const FIWARE_CONTEXT = "https://uri.etsi.org/ngsi-ld/v1/ngsi-ld-core-context.jsonld";
 
 // Estados de controlo em memória
 const activeSimulations = {};
@@ -48,9 +57,10 @@ async function initFiware() {
                 apikey: API_KEY,
                 cbroker: "http://orion:1026",
                 entity_type: "Manhole",
-                resource: "/iot/json"
+                resource: "/iot/json",
+                ngsiVersion: "ld"
             }]
-        }, { headers: fiwareHeaders }).catch(err => {
+        }, { headers: iotaHeaders }).catch(err => {
             if (err.response && err.response.status === 409) {
                 console.log('Service Group já configurado.');
             } else throw err;
@@ -58,9 +68,9 @@ async function initFiware() {
 
         // LIMPEZA: Apaga inscrições antigas para garantir que a nova regra seja aplicada
         try {
-            const subs = await axios.get(`${ORION_URL}/v2/subscriptions`, { headers: fiwareHeaders });
+            const subs = await axios.get(`${ORION_URL}/ngsi-ld/v1/subscriptions`, { headers: fiwareHeaders });
             for (let sub of subs.data) {
-                await axios.delete(`${ORION_URL}/v2/subscriptions/${sub.id}`, { headers: fiwareHeaders });
+                await axios.delete(`${ORION_URL}/ngsi-ld/v1/subscriptions/${sub.id}`, { headers: fiwareHeaders });
             }
             console.log('Inscrições antigas do Orion limpas com sucesso.');
         } catch (e) {
@@ -68,20 +78,19 @@ async function initFiware() {
         }
 
         // CRIAÇÃO DA SUBSCRIPTION CORRETA PARA HISTÓRICO
-        await axios.post(`${ORION_URL}/v2/subscriptions`, {
+        await axios.post(`${ORION_URL}/ngsi-ld/v1/subscriptions`, {
+            id: "urn:ngsi-ld:Subscription:ManholeToQuantumLeap",
+            type: "Subscription",
             description: "Notify QuantumLeap on any change",
-            subject: {
-                entities: [{ idPattern: ".*", type: "Manhole" }],
-                condition: {
-                    attrs: ["waterLevel", "coverStatus", "observationDate"] 
+            entities: [{ type: "Manhole" }],
+            watchedAttributes: ["waterLevel", "coverStatus", "observationDate"],
+            notification: {
+                endpoint: {
+                    uri: "http://quantumleap:8668/v2/notify",
+                    accept: "application/json"
                 }
             },
-            notification: {
-                http: { url: "http://quantumleap:8668/v2/notify" },
-                attrs: ["waterLevel", "coverStatus", "location", "lastMaintenance", "observationDate"],
-                metadata: ["dateCreated", "dateModified"]
-            },
-            throttling: 1
+            "@context": FIWARE_CONTEXT
         }, { headers: fiwareHeaders });
         
         console.log('Subscription para o QuantumLeap (Base de Dados Temporal) criada!');
@@ -94,7 +103,7 @@ async function initFiware() {
 // Buscar todos os bueiros do Orion
 app.get('/api/devices', async (req, res) => {
     try {
-        const response = await axios.get(`${ORION_URL}/v2/entities?type=Manhole`, { headers: fiwareHeaders });
+        const response = await axios.get(`${ORION_URL}/ngsi-ld/v1/entities?type=Manhole`, { headers: fiwareHeaders });
         
         const devices = response.data.map(entity => ({
             id: entity.id,
@@ -119,7 +128,7 @@ app.get('/api/devices/:deviceId/history', async (req, res) => {
     const entityId = `urn:ngsi-ld:Manhole:${deviceId}`;
     
     try {
-        const response = await axios.get(`${QUANTUMLEAP_URL}/v2/entities/${entityId}`, { headers: fiwareHeaders });
+        const response = await axios.get(`${QUANTUMLEAP_URL}/ngsi-ld/v1/entities/${entityId}`, { headers: fiwareHeaders });
         res.json(response.data);
     } catch (error) {
         if (error.response && error.response.status === 404) {
@@ -141,11 +150,13 @@ app.post('/api/devices', async (req, res) => {
         return res.status(400).json({ error: 'Latitude ou longitude inválidas.' });
     }
 
+    const entityId = `urn:ngsi-ld:Manhole:${deviceId}`;
+
     try {
         const payload = {
             devices: [{
                 device_id: deviceId,
-                entity_name: `urn:ngsi-ld:Manhole:${deviceId}`,
+                entity_name: entityId,
                 entity_type: "Manhole",
                 protocol: "IoTA-JSON",
                 transport: "HTTP",
@@ -159,12 +170,12 @@ app.post('/api/devices', async (req, res) => {
             }]
         };
 
-        await axios.post(`${IOTA_URL}/iot/devices`, payload, { headers: fiwareHeaders });
-        
+        await axios.post(`${IOTA_URL}/iot/devices`, payload, { headers: iotaHeaders });
+
         await axios.post(`${IOTA_DATA_URL}/iot/json?k=${API_KEY}&i=${deviceId}`, {
             wl: 0,
             cs: "closed",
-            loc: { type: "Point", coordinates: [parseFloat(longitude), parseFloat(latitude)] },
+            loc: [parseFloat(longitude), parseFloat(latitude)],
             lm: new Date(lastMaintenance || Date.now()).toISOString(),
             od: new Date().toISOString()
         });
@@ -189,8 +200,8 @@ app.put('/api/devices/:oldDeviceId', async (req, res) => {
 
     try {
         if (oldDeviceId !== deviceId) {
-            await axios.delete(`${IOTA_URL}/iot/devices/${oldDeviceId}`, { headers: fiwareHeaders }).catch(() => {});
-            await axios.delete(`${ORION_URL}/v2/entities/${oldEntityId}`, { headers: fiwareHeaders }).catch(() => {});
+            await axios.delete(`${IOTA_URL}/iot/devices/${oldDeviceId}`, { headers: iotaHeaders }).catch(() => {});
+            await axios.delete(`${ORION_URL}/ngsi-ld/v1/entities/${oldEntityId}`, { headers: fiwareHeaders }).catch(() => {});
 
             const payload = {
                 devices: [{
@@ -208,7 +219,7 @@ app.put('/api/devices/:oldDeviceId', async (req, res) => {
                     ]
                 }]
             };
-            await axios.post(`${IOTA_URL}/iot/devices`, payload, { headers: fiwareHeaders });
+            await axios.post(`${IOTA_URL}/iot/devices`, payload, { headers: iotaHeaders });
             
             // Transferir estados em memória caso o ID mude
             if (activeSimulations[oldEntityId]) {
@@ -230,7 +241,7 @@ app.put('/api/devices/:oldDeviceId', async (req, res) => {
         await axios.post(`${IOTA_DATA_URL}/iot/json?k=${API_KEY}&i=${deviceId}`, {
             wl: parseInt(waterLevel),
             cs: coverStatus,
-            loc: { type: "Point", coordinates: [parseFloat(longitude), parseFloat(latitude)] },
+            loc: [parseFloat(longitude), parseFloat(latitude)],
             lm: new Date(lastMaintenance || Date.now()).toISOString(),
             od: new Date().toISOString()
         });
@@ -248,10 +259,10 @@ app.delete('/api/devices/:deviceId', async (req, res) => {
 
     try {
         // Remove do IoT Agent
-        await axios.delete(`${IOTA_URL}/iot/devices/${deviceId}`, { headers: fiwareHeaders }).catch(() => {});
+        await axios.delete(`${IOTA_URL}/iot/devices/${deviceId}`, { headers: iotaHeaders }).catch(() => {});
         
         // Remove do Orion Context Broker
-        await axios.delete(`${ORION_URL}/v2/entities/${entityId}`, { headers: fiwareHeaders }).catch(() => {});
+        await axios.delete(`${ORION_URL}/ngsi-ld/v1/entities/${entityId}`, { headers: fiwareHeaders }).catch(() => {});
 
         // Limpa os estados em memória caso o bueiro esteja rodando alguma simulação
         if (activeSimulations[entityId]) {
@@ -274,7 +285,7 @@ app.post('/api/devices/:deviceId/close-cover', async (req, res) => {
     const entityId = `urn:ngsi-ld:Manhole:${deviceId}`;
 
     try {
-        const orionRes = await axios.get(`${ORION_URL}/v2/entities/${entityId}`, { headers: fiwareHeaders });
+        const orionRes = await axios.get(`${ORION_URL}/ngsi-ld/v1/entities/${entityId}`, { headers: fiwareHeaders });
         const entity = orionRes.data;
 
         coverCooldown[entityId] = Date.now();
@@ -282,8 +293,8 @@ app.post('/api/devices/:deviceId/close-cover', async (req, res) => {
         await axios.post(`${IOTA_DATA_URL}/iot/json?k=${API_KEY}&i=${deviceId}`, {
             wl: entity.waterLevel ? entity.waterLevel.value : 0,
             cs: 'closed',
-            loc: entity.location.value,
-            lm: entity.lastMaintenance.value,
+            loc: entity.location ? entity.location.value.coordinates : null,
+            lm: entity.lastMaintenance ? entity.lastMaintenance.value : new Date().toISOString(),
             od: new Date().toISOString()
         });
 
@@ -304,7 +315,7 @@ app.post('/api/devices/:deviceId/drain', async (req, res) => {
     if (!activeSimulations[entityId]) {
         const backgroundDrain = setInterval(async () => {
             try {
-                const orionRes = await axios.get(`${ORION_URL}/v2/entities/${entityId}`, { headers: fiwareHeaders });
+                const orionRes = await axios.get(`${ORION_URL}/ngsi-ld/v1/entities/${entityId}`, { headers: fiwareHeaders });
                 const entity = orionRes.data;
                 let wl = entity.waterLevel ? entity.waterLevel.value : 0;
 
@@ -313,8 +324,8 @@ app.post('/api/devices/:deviceId/drain', async (req, res) => {
                 await axios.post(`${IOTA_DATA_URL}/iot/json?k=${API_KEY}&i=${deviceId}`, {
                     wl: wl,
                     cs: entity.coverStatus ? entity.coverStatus.value : 'closed',
-                    loc: entity.location.value,
-                    lm: entity.lastMaintenance.value,
+                    loc: entity.location ? entity.location.value.coordinates : null,
+                    lm: entity.lastMaintenance ? entity.lastMaintenance.value : new Date().toISOString(),
                     od: new Date().toISOString()
                 });
 
@@ -355,7 +366,7 @@ app.post('/api/simulate/auto/start', async (req, res) => {
 
     activeSimulations[entityId] = setInterval(async () => {
         try {
-            const orionRes = await axios.get(`${ORION_URL}/v2/entities/${entityId}`, { headers: fiwareHeaders });
+            const orionRes = await axios.get(`${ORION_URL}/ngsi-ld/v1/entities/${entityId}`, { headers: fiwareHeaders });
             const entity = orionRes.data;
 
             let currentWl = entity.waterLevel ? entity.waterLevel.value : 0;
@@ -388,8 +399,8 @@ app.post('/api/simulate/auto/start', async (req, res) => {
             await axios.post(`${IOTA_DATA_URL}/iot/json?k=${API_KEY}&i=${deviceId}`, {
                 wl: currentWl,
                 cs: currentCs,
-                loc: entity.location.value,
-                lm: entity.lastMaintenance.value,
+                loc: entity.location ? entity.location.value.coordinates : null, 
+                lm: entity.lastMaintenance ? entity.lastMaintenance.value : new Date().toISOString(),
                 od: new Date().toISOString()
             });
 
